@@ -939,20 +939,7 @@ let html = `
         ticketMatricesContainer.appendChild(card);
       });
     }
-
-    let timeLeft = 30;
-    setInterval(() => {
-      if (isDrawingPhase) return;
-      timeLeft--;
-      if (timeLeft <= 0) {
-        startDrawingPhase();
-      } else {
-        const seconds = timeLeft < 10 ? `0${timeLeft}` : timeLeft;
-        document.getElementById('countdown').innerText = `00:${seconds}`;
-        document.getElementById('timer-bar').style.width = `${(timeLeft / 30) * 100}%`;
-      }
-    }, 1000);
-
+ 
     function startDrawingPhase() {
       // 👇 ADD IT HERE (at the very start of the function)
     async function incrementGamesPlayed() {
@@ -981,8 +968,7 @@ let html = `
 
       initMasterBoard();
       const pool = Array.from({ length: 75 }, (_, i) => i + 1);
-      const shuffled = pool.sort(() => Math.random() - 0.5);
-
+      
       drawnNumbers = [];
       let drawCount = 0;
 
@@ -1548,6 +1534,56 @@ function copyReferralLink() {
         });
     }
 }
+import { doc, onSnapshot, updateDoc, increment } from "firebase/firestore"; 
+// Assume 'db' is your initialized Firestore client
+
+const gameRef = doc(db, "game_room", "state");
+
+// 1. Listen for global state changes from the Python server
+onSnapshot(gameRef, (docSnap) => {
+    if (!docSnap.exists()) return;
+    const data = docSnap.data();
+
+    const timerDisplay = document.getElementById("timer-display");
+    const currentBallDisplay = document.getElementById("current-ball");
+
+    if (data.status === 'WAITING_FOR_PLAYERS') {
+        timerDisplay.innerText = "Waiting for players to buy a cartel...";
+        currentBallDisplay.innerText = "";
+    } 
+    else if (data.status === 'COUNTDOWN') {
+        timerDisplay.innerText = `Game starts in: ${data.timer}s`;
+    } 
+    else if (data.status === 'DRAWING') {
+        timerDisplay.innerText = "Game in progress!";
+        
+        // Grab the most recently drawn ball from the array
+        if (data.drawn_numbers.length > 0) {
+            const latestBall = data.drawn_numbers[data.drawn_numbers.length - 1];
+            currentBallDisplay.innerText = latestBall;
+            
+            // TODO: Add your logic here to check if 'latestBall' matches a number on the user's cartel
+        }
+    }
+});
+
+// 2. Unpause the global game when a player buys a cartel
+async function buyCartel() {
+    // ... your existing code to deduct balance and generate the user's cartel UI ...
+    
+    // Increment the active player count in Firestore to trigger the Python loop
+    await updateDoc(gameRef, {
+        active_players: increment(1)
+    });
+}
+
+// 3. Handle player leaving or closing the WebApp
+window.addEventListener("beforeunload", async () => {
+    // Decrement the player count when they leave so the game pauses if the room empties
+    await updateDoc(gameRef, {
+        active_players: increment(-1)
+    });
+});
 </script>
 </body>
 </html>
