@@ -1681,6 +1681,17 @@ function copyReferralLink() {
         });
     }
 }
+// Start game synchronization loop
+function initGameLoop() {
+    syncGameState(); // Run once immediately on load
+    setInterval(syncGameState, 1000); // Poll every 1 second
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGameLoop);
+} else {
+    initGameLoop();
+}
 </script>
 </body>
 </html>
