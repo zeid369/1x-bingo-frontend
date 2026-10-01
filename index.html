@@ -432,7 +432,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const response = await fetch(`https://onex-bingo-backend.onrender.com/api/user-data?userId=${window.currentUserId}`, {
             method: 'GET',
             headers: {
-                'ngrok-skip-browser-warning': 'true'
+                'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
             }
         });
 
@@ -526,7 +526,7 @@ if (profileHelpBtn) {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'ngrok-skip-browser-warning': 'true' // Critical for free ngrok accounts
+                    'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
                 },
                 body: JSON.stringify({ userId: window.currentUserId })
             });
@@ -554,10 +554,11 @@ const rulesBtn = document.getElementById('game-rules-btn');
             }
 
             // Send a request to your Flask backend
-            fetch('/api/send-rules', {
+            fetch('https://onex-bingo-backend.onrender.com/api/send-rules', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
                 },
                 body: JSON.stringify({ userId: userId })
             })
@@ -939,7 +940,114 @@ let html = `
         ticketMatricesContainer.appendChild(card);
       });
     }
- 
+
+let localDrawnCount = 0; // Tracks processed balls for audio calls
+
+async function syncGameState() {
+    try {
+        const response = await fetch('/api/game-state', {
+            method: 'GET',
+            headers: {
+                'X-Telegram-Init-Data': window.Telegram.WebApp.initData
+            }
+        });
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            handleServerGameState(data.game_state);
+            
+            // Update balance if available
+            if (data.user_balance !== undefined) {
+                const balanceEl = document.getElementById('user-balance');
+                if (balanceEl) balanceEl.innerText = `${data.user_balance} ETB`;
+            }
+        }
+    } catch (error) {
+        console.error("Error syncing game state:", error);
+    }
+}
+
+function handleServerGameState(state) {
+    const countdownEl = document.getElementById('countdown');
+    const timerBarEl = document.getElementById('timer-bar');
+
+    // 1. COUNTDOWN PHASE
+    if (state.phase === 'countdown') {
+        const seconds = state.remaining_seconds < 10 ? `0${state.remaining_seconds}` : state.remaining_seconds;
+        if (countdownEl) countdownEl.innerText = `00:${seconds}`;
+        if (timerBarEl) timerBarEl.style.width = `${(state.remaining_seconds / 60) * 100}%`;
+        
+        // Reset local tracking when a new round starts
+        if (localDrawnCount > 0 && state.drawn_balls.length === 0) {
+            localDrawnCount = 0;
+            drawnNumbers = [];
+            resetMasterBoardUI();
+        }
+    } 
+    // 2. DRAWING PHASE
+    else if (state.phase === 'drawing') {
+        if (countdownEl) countdownEl.innerText = "LIVE DRAW";
+        if (timerBarEl) timerBarEl.style.width = "100%";
+
+        // Process newly drawn balls sent by server
+        if (state.drawn_balls.length > localDrawnCount) {
+            for (let i = localDrawnCount; i < state.drawn_balls.length; i++) {
+                const drawnNum = state.drawn_balls[i];
+                processNewDrawnBall(drawnNum, i + 1);
+            }
+            localDrawnCount = state.drawn_balls.length;
+        }
+    }
+}
+
+// Helper function preserving your existing ball animation, audio, and master cell styling
+function processNewDrawnBall(drawnNum, currentCount) {
+    drawnNumbers.push(drawnNum);
+
+    // Update counter & ball text
+    if (typeof ticketDrawCount !== 'undefined') ticketDrawCount.innerText = `${currentCount}/75`;
+    if (typeof ticketBallText !== 'undefined') ticketBallText.innerText = drawnNum;
+
+    // Trigger ball animation
+    if (typeof ticketCurrentBall !== 'undefined') {
+        ticketCurrentBall.classList.remove('animate-ball');
+        void ticketCurrentBall.offsetWidth; // Force reflow
+        ticketCurrentBall.classList.add('animate-ball');
+    }
+
+    // Amharic Call & Status Text
+    let letter = drawnNum <= 15 ? 'B' : drawnNum <= 30 ? 'I' : drawnNum <= 45 ? 'N' : drawnNum <= 60 ? 'G' : 'O';
+    if (typeof speakBingoCallAmharic === 'function' && typeof getAmharicBingoCallText === 'function') {
+        speakBingoCallAmharic(getAmharicBingoCallText(drawnNum));
+    }
+    if (typeof ticketStatusText !== 'undefined') {
+        ticketStatusText.innerHTML = `የወጣው ቁጥር: <strong class="text-white ml-1 text-lg">${letter} - ${drawnNum}</strong>`;
+    }
+
+    // Highlight Master Board Cell
+    const masterCell = document.getElementById(`master-num-${drawnNum}`);
+    if (masterCell) {
+        const activeBg = masterCell.getAttribute('data-active-bg') || 'bg-yellow-500';
+        masterCell.className = `h-5 ${activeBg} text-white font-mono font-black text-[11px] flex items-center justify-center border border-slate-900 shadow-inner`;
+    }
+
+    // Render matrices
+    if (typeof renderTicketMatrices === 'function') renderTicketMatrices();
+    if (typeof renderPopupCartels === 'function') renderPopupCartels();
+}
+
+function resetMasterBoardUI() {
+    for (let i = 1; i <= 75; i++) {
+        const masterCell = document.getElementById(`master-num-${i}`);
+        if (masterCell) {
+            masterCell.className = 'h-5 bg-slate-800 text-slate-400 font-mono text-[11px] flex items-center justify-center border border-slate-900';
+        }
+    }
+}
+
+// Start polling every 1 second
+setInterval(syncGameState, 1000);
+
     function startDrawingPhase() {
       // 👇 ADD IT HERE (at the very start of the function)
     async function incrementGamesPlayed() {
@@ -968,49 +1076,36 @@ let html = `
 
       initMasterBoard();
       const pool = Array.from({ length: 75 }, (_, i) => i + 1);
-      
+      const shuffled = [...pool].sort(() => Math.random() - 0.5);
+
       drawnNumbers = [];
       let drawCount = 0;
+      let winningList = [];
 
       drawInterval = setInterval(() => {
-        if (drawCount >= 75) {
+        if (drawCount >= shuffled.length) {
           clearInterval(drawInterval);
-          finishRound([]); return;
+          if (winningList.length === 0) {
+            finishRound([]);
+          }
+          return;
         }
 
-        const drawnNum = shuffled[drawCount];
-        drawnNumbers.push(drawnNum);
-        drawCount++;
+        const nextNumber = shuffled[drawCount++];
+        processNewDrawnBall(nextNumber, drawCount);
 
-        ticketDrawCount.innerText = `${drawCount}/75`;
-        ticketBallText.innerText = drawnNum;
-        ticketCurrentBall.classList.remove('animate-ball');
-        void ticketCurrentBall.offsetWidth; 
-        ticketCurrentBall.classList.add('animate-ball');
-        
-        let letter = drawnNum <= 15 ? 'B' : drawnNum <= 30 ? 'I' : drawnNum <= 45 ? 'N' : drawnNum <= 60 ? 'G' : 'O';
-        speakBingoCallAmharic(getAmharicBingoCallText(drawnNum));
-        ticketStatusText.innerHTML = `የወጣው ቁጥር: <strong class="text-white ml-1 text-lg">${letter} - ${drawnNum}</strong>`;
-
-        const masterCell = document.getElementById(`master-num-${drawnNum}`);
-        if (masterCell) {
-          const activeBg = masterCell.getAttribute('data-active-bg');
-          masterCell.className = `h-5 ${activeBg} text-white font-mono font-black text-[11px] flex items-center justify-center border border-slate-900 shadow-inner`;
-        }
-
-        renderTicketMatrices();
-        renderPopupCartels(); 
-
-        let winningList = [];
-selectedTickets.forEach(ticketId => {
-  if (checkBingo(generateMatrix(ticketId), drawnNumbers)) {
-    winningList.push({ 
-      name: `${window.currentUserName || 'Player'} (እርስዎ)`, 
-      phone: window.currentUserPhone || 'Unknown', 
-      cartel: ticketId 
-    });
-  }
-});
+        selectedTickets.forEach(ticketId => {
+          if (checkBingo(generateMatrix(ticketId), drawnNumbers)) {
+            const existingWinner = winningList.find(w => w.cartel === ticketId);
+            if (!existingWinner) {
+              winningList.push({
+                name: `${window.currentUserName || 'Player'} (እርስዎ)`,
+                phone: window.currentUserPhone || 'Unknown',
+                cartel: ticketId
+              });
+            }
+          }
+        });
 
         if (winningList.length > 0) {
           clearInterval(drawInterval);
@@ -1153,7 +1248,7 @@ async function sendTransactionToBackend(type, amount) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true'
+                'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
             },
             body: JSON.stringify({
                 userId: userId,
@@ -1373,7 +1468,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
        const response = await fetch(`https://onex-bingo-backend.onrender.com/api/user-data?userId=${userId}`, {
             headers: {
-                'ngrok-skip-browser-warning': 'true'
+                'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
             }
         });
         if (response.ok) {
@@ -1415,7 +1510,7 @@ async function fetchAndRenderLeaderboard() {
     try {
         const response = await fetch('https://onex-bingo-backend.onrender.com/api/leaderboard', {
             method: 'GET',
-            headers: { 'ngrok-skip-browser-warning': 'true' }
+            headers: { 'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')}
         });
 
         if (response.ok) {
@@ -1532,135 +1627,6 @@ function copyReferralLink() {
         }).catch(err => {
             console.error("Failed to copy link: ", err);
         });
-    }
-}
-import { doc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
-
-const gameRef = doc(db, "game_room", "state");
-let isHostingCountdown = false;
-
-// 1. Listen to global state changes in real time
-onSnapshot(gameRef, async (docSnap) => {
-    if (!docSnap.exists()) return;
-    data = docSnap.data();
-
-    const timerDisplay = document.getElementById("timer-display");
-    const currentBallDisplay = document.getElementById("current-ball");
-
-    // Update UI based on global status
-    if (data.status === 'WAITING_FOR_PLAYERS') {
-        timerDisplay.innerText = "Waiting for players to buy a cartel...";
-        if (currentBallDisplay) currentBallDisplay.innerText = "";
-    } 
-    else if (data.status === 'COUNTDOWN') {
-        timerDisplay.innerText = `Game starts in: ${data.timer}s`;
-    } 
-    else if (data.status === 'DRAWING') {
-        timerDisplay.innerText = "Game in progress!";
-        if (data.drawn_numbers && data.drawn_numbers.length > 0) {
-            const latestBall = data.drawn_numbers[data.drawn_numbers.length - 1];
-            if (currentBallDisplay) currentBallDisplay.innerText = latestBall;
-            
-            // TODO: Check if 'latestBall' matches numbers on the user's green cartel
-        }
-    }
-});
-
-// 2. Client-side game runner (Replaces the Python backend)
-async function checkAndStartGameLoop(gameRef) {
-    const snap = await getDoc(gameRef);
-    if (!snap.exists()) return;
-    const data = snap.data();
-
-    // If already running or waiting for players with 0 count, do nothing
-    if (isHostingCountdown || data.active_players <= 0) return;
-
-    // If state is waiting, kick off the countdown
-    if (data.status === 'WAITING_FOR_PLAYERS' || data.status === 'COUNTDOWN') {
-        isHostingCountdown = true;
-        
-        await updateDoc(gameRef, { status: 'COUNTDOWN', timer: 30 });
-
-        let currentTimer = 30;
-        const countdownInterval = setInterval(async () => {
-            currentTimer--;
-            if (currentTimer > 0) {
-                await updateDoc(gameRef, { timer: currentTimer });
-            } else {
-                clearInterval(countdownInterval);
-                // Time's up! Start drawing balls
-                startDrawingPhase(gameRef);
-            }
-        }, 1000);
-    }
-}
-
-// 3. Draw balls every 2 seconds and push to Firestore
-async function startDrawingPhase(gameRef) {
-    const bingoPool = [];
-    ['B', 'I', 'N', 'G', 'O'].forEach((letter, idx) => {
-        const start = idx * 15 + 1;
-        for (let i = start; i < start + 15; i++) {
-            bingoPool.push(`${letter}-${i}`);
-        }
-    });
-    
-    // Shuffle pool
-    bingoPool.sort(() => Math.random() - 0.5);
-    let drawn = [];
-
-    await updateDoc(gameRef, { status: 'DRAWING', drawn_numbers: [] });
-
-    let index = 0;
-    const drawInterval = setInterval(async () => {
-        if (index < bingoPool.length) {
-            drawn.push(bingoPool[index]);
-            await updateDoc(gameRef, { drawn_numbers: drawn });
-            index++;
-        } else {
-            clearInterval(drawInterval);
-            isHostingCountdown = false;
-            // Reset for next game
-            await updateDoc(gameRef, { status: 'WAITING_FOR_PLAYERS', timer: 30, active_players: 0 });
-        }
-    }, 2000);
-}
-
-// 2. Unpause the global game when a player buys a cartel
-async function buyCartel() {
-    // ... your existing code to deduct balance and generate the user's cartel UI ...
-    
-    // Increment the active player count in Firestore to trigger the Python loop
-    await updateDoc(gameRef, {
-        active_players: increment(1)
-    });
-}
-
-// 3. Handle player leaving or closing the WebApp
-window.addEventListener("beforeunload", async () => {
-    // Decrement the player count when they leave so the game pauses if the room empties
-    await updateDoc(gameRef, {
-        active_players: increment(-1)
-    });
-});
-// Call this function when the user clicks/buys a cartel
-async function handleCartelSelection(cartelElement, cartelId) {
-    // 1. INSTANT UI FEEDBACK (Turns green and closes popup immediately)
-    cartelElement.classList.add("green"); // Make sure your CSS has a .green class for cartels
-    closePopup(); // Close your modal popup instantly
-
-    try {
-        // 2. Update Firebase in the background
-        const gameRef = doc(db, "game_room", "state");
-        await updateDoc(gameRef, {
-            active_players: increment(1)
-        });
-        
-        // Check if we need to kick off the timer (if this is the first player)
-        checkAndStartGameLoop(gameRef);
-        
-    } catch (error) {
-        console.error("Error syncing cartel choice:", error);
     }
 }
 </script>
