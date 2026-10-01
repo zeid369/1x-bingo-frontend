@@ -769,36 +769,73 @@ function recordGameWon(amountWon) {
       });
     }
 
-    function toggleCartel(id) {
-      if (isDrawingPhase) return;
-      const btn = document.getElementById(`cartel-${id}`);
-      const index = selectedTickets.indexOf(id);
+async function toggleCartel(id) {
+    const userId = window.currentUserId || window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
+    const cartelBtn = document.getElementById(`cartel-${id}`);
 
-      if (index > -1) {
-        selectedTickets.splice(index, 1);
-        userPlayBalance += TICKET_PRICE;
-        // 🟢 ADD THIS LINE (Refund +10 to Firebase):
-        syncBalanceToFirestore(TICKET_PRICE);
+    // If it's RED (locked by someone else), ignore the click entirely
+    if (cartelBtn.classList.contains('bg-red-500')) return;
 
-        btn.className = 'h-9 bg-xbet-blue hover:bg-slate-700 text-white font-bold text-xs rounded border border-xbet-border/80 flex items-center justify-center';
-    } else {
-        if (selectedTickets.length >= MAX_SELECTION) return;
-        if (userPlayBalance < TICKET_PRICE) {
-            alert('የጨዋታ ሂሳብዎ በቂ አይደለም!');
-            return;
+    const roundRef = db.collection("game_rounds").doc("current");
+    const userRef = db.collection("users").doc(userId);
+
+    // If it's GREEN (locked by YOU) -> User wants to cancel/refund
+    if (cartelBtn.classList.contains('bg-xbet-green')) {
+        try {
+            const batch = db.batch();
+            // Refund the money
+            batch.update(userRef, { balance: firebase.firestore.FieldValue.increment(TICKET_PRICE) });
+            // Remove the lock
+            batch.update(roundRef, { [`locked_cartels.${id}`]: firebase.firestore.FieldValue.delete() });
+            await batch.commit();
+
+            // Optimistic UI Update
+            userPlayBalance += TICKET_PRICE;
+            updateUI();
+        } catch(e) {
+            console.error("Error refunding cartel:", e);
         }
-        selectedTickets.push(id);
-        userPlayBalance -= TICKET_PRICE;
-
-        // 🟢 ADD THIS LINE (Deduct -10 from Firebase):
-        syncBalanceToFirestore(-TICKET_PRICE);
-
-        btn.className = 'h-9 bg-xbet-green text-black font-black text-xs rounded border border-green-300 flex items-center justify-center';
+        return; // Stop here, we are done refunding
     }
+
+    // If it's DEFAULT (Available) -> User wants to BUY
+    if (userPlayBalance < TICKET_PRICE) {
+        alert("የጨዋታ ሂሳብዎ በቂ አይደለም! (Insufficient balance)");
+        return;
+    }
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            const roundDoc = await transaction.get(roundRef);
+            const locks = roundDoc.data().locked_cartels || {};
+
+            // Double check no one else took it in the last split second
+            if (locks[id]) {
+                throw new Error("ALREADY_LOCKED");
+            }
+
+            // Lock it for this user
+            transaction.update(roundRef, { [`locked_cartels.${id}`]: userId });
+            // Deduct the balance
+            transaction.update(userRef, { balance: firebase.firestore.FieldValue.increment(-TICKET_PRICE) });
+        });
+
+        // Optimistic UI Update
+        userPlayBalance -= TICKET_PRICE;
+        updateUI();
+
+    } catch(e) {
+        if (e.message === "ALREADY_LOCKED") {
+            // It will turn red automatically via the snapshot listener
+        } else {
+            console.error("Purchase failed:", e);
+        }
+    }
+
       updateUI();
       renderPopupCartels();
       renderTicketMatrices();
-    }
+}
 
     function updateUI() {
       playWalletDisplay.innerText = userPlayBalance.toFixed(2);
@@ -1180,25 +1217,40 @@ async function loadUserBalance() {
 let currentRoundUnsubscribe = null;
 
 function subscribeToGameRound() {
-  if (currentRoundUnsubscribe) currentRoundUnsubscribe();
+    const userId = window.currentUserId || window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
 
-  currentRoundUnsubscribe = db.collection("game_rounds").doc("current")
-    .onSnapshot((doc) => {
-      if (!doc.exists) return;
-      const roundData = doc.data();
+    db.collection("game_rounds").doc("current").onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            const lockedMap = data.locked_cartels || {}; // Now a dictionary: { "1": "userId", "2": "userId" }
 
-      // 1. Sync locked cartels across all online players
-      updateLockedCartelsUI(roundData.locked_cartels || []);
+            // Rebuild the local selected list based on server truth
+            selectedTickets = [];
 
-      // 2. Sync global countdown timer & game phase
-      updateTimerUI(roundData.timer || 0, roundData.status);
+            // Loop through all 90 buttons
+            for (let i = 1; i <= 90; i++) {
+                const btn = document.getElementById(`cartel-${i}`);
+                if (!btn) continue;
 
-      // 3. Sync drawn balls across all players in real-time
-      if (roundData.status === "DRAWING" && roundData.drawn_balls) {
-        syncDrawnBallsUI(roundData.drawn_balls, roundData.last_drawn);
-      }
-    }, (error) => {
-      console.error("Error subscribing to game round:", error);
+                if (lockedMap[i]) {
+                    if (lockedMap[i] === userId) {
+                        // LOCKED BY YOU -> GREEN
+                        btn.className = "cartel-btn w-full aspect-[4/3] rounded flex items-center justify-center text-lg font-black shadow-md transition-all duration-200 border-2 bg-xbet-green text-black border-xbet-green scale-95";
+                        selectedTickets.push(i); // Add to your popup list
+                    } else {
+                        // LOCKED BY SOMEONE ELSE -> RED
+                        btn.className = "cartel-btn w-full aspect-[4/3] rounded flex items-center justify-center text-lg font-black shadow-md transition-all duration-200 border-2 bg-red-500 text-white border-red-600 opacity-80 cursor-not-allowed scale-95";
+                    }
+                } else {
+                    // AVAILABLE -> DEFAULT GRAY
+                    btn.className = "cartel-btn w-full aspect-[4/3] bg-xbet-darker border border-gray-700 rounded flex items-center justify-center text-white text-lg font-black shadow-md transition-all duration-200 hover:bg-gray-700 active:scale-95";
+                }
+            }
+
+            // Keep UI (timers and popup) updated
+            updateUI(); 
+            // ... (keep the rest of your timer/status logic here) ...
+        }
     });
 }
 
@@ -1226,12 +1278,16 @@ function updateLockedCartelsUI(lockedCartels) {
 }
 
 // Sync global timer display and handle page switching
+// Sync global timer display and handle page switching
 function updateTimerUI(seconds, status) {
-  const timerElem = document.getElementById("timer-display"); // Update ID if yours is different (e.g., 'countdown')
-  const statusElem = document.getElementById("game-status-display"); // Update ID if yours is different
+  // FIXED: Corrected IDs to match your HTML
+  const timerElem = document.getElementById("countdown"); 
+  const statusElem = document.getElementById("game-status-label"); 
 
   if (timerElem) timerElem.innerText = `00:${seconds < 10 ? '0'+seconds : seconds}`;
-  if (statusElem) statusElem.innerText = status;
+  if (statusElem) {
+      statusElem.innerText = status === "DRAWING" ? "ጨዋታው ተጀምሯል (እጣ እየወጣ ነው)" : "ጨዋታው ሊጀምር ነው";
+  }
 
   // Transition to DRAWING Phase
   if (status === "DRAWING") {
@@ -1241,7 +1297,6 @@ function updateTimerUI(seconds, status) {
     if (typeof isDrawingPhase !== 'undefined' && !isDrawingPhase) {
       isDrawingPhase = true;
       if (typeof popupPanel !== 'undefined') popupPanel.classList.add('hidden');
-      if (typeof gameStatusLabel !== 'undefined') gameStatusLabel.innerText = 'ጨዋታው ተጀምሯል (እጣ እየወጣ ነው)';
       if (typeof currentPage !== 'undefined' && currentPage === 'home') {
         switchPage('ticket');
       }
@@ -1260,55 +1315,57 @@ function updateTimerUI(seconds, status) {
 
 // Display drawn balls synchronized across all users
 function syncDrawnBallsUI(drawnBalls, lastDrawn) {
+  // Update global drawn numbers so bingo checks work
+  window.drawnNumbers = drawnBalls;
+
   drawnBalls.forEach(ball => {
-    const masterBoardCell = document.getElementById(`ball-board-${ball}`);
+    // FIXED: Changed 'ball-board' to 'master-num'
+    const masterBoardCell = document.getElementById(`master-num-${ball}`);
     if (masterBoardCell) {
       masterBoardCell.classList.add("bg-yellow-500", "text-black", "font-bold");
     }
   });
 
-  const lastBallElem = document.getElementById("current-ball-display");
+  // FIXED: Changed 'current-ball-display' to 'ticket-ball-text'
+  const lastBallElem = document.getElementById("ticket-ball-text");
   if (lastBallElem && lastDrawn) {
     lastBallElem.innerText = lastDrawn;
+    
+    const countElem = document.getElementById("ticket-draw-count");
+    if(countElem) countElem.innerText = `${drawnBalls.length}/75`;
+    
+    // Refresh the player's matrices so marked balls highlight in green
+    renderTicketMatrices(); 
   }
 }
 
+function resetBoardForNewRound() {
+  // 1. Clear all yellow highlights from the Master Board
+  for (let i = 1; i <= 75; i++) {
+    // FIXED: Changed 'ball-board' to 'master-num'
+    const cell = document.getElementById(`master-num-${i}`);
+    if (cell) {
+      cell.classList.remove("bg-yellow-500", "text-black", "font-bold");
+    }
+  }
+  
+  // 2. Reset local selections
+  selectedTickets = [];
+  window.drawnNumbers = [];
+  updateUI(); // FIXED: Removed undefined updateSelectedCount()
+  
+  // 3. Clear the "Current Ball" display text
+  const lastBallElem = document.getElementById("ticket-ball-text"); 
+  if (lastBallElem) lastBallElem.innerText = "--";
+  
+  const countElem = document.getElementById("ticket-draw-count");
+  if(countElem) countElem.innerText = `0/75`;
+  
+  console.log("Board reset for new round.");
+}
 // ==========================================
 // REGISTER PURCHASED CARTELS TO FIRESTORE
 // ==========================================
-async function processCartelPurchaseAndStart() {
-  if (selectedTickets.length === 0) return;
-
-  const totalCost = selectedTickets.length * TICKET_PRICE;
-  if (userBalance < totalCost) {
-    alert("Insufficient balance!");
-    return;
-  }
-
-  try {
-    const batch = db.batch();
-    const userRef = db.collection("users").doc(userId);
-    const roundRef = db.collection("game_rounds").doc("current");
-
-    // Atomic update: deduct balance & add cartels to central locked list
-    batch.update(userRef, {
-      balance: firebase.firestore.FieldValue.increment(-totalCost)
-    });
-
-    batch.update(roundRef, {
-      locked_cartels: firebase.firestore.FieldValue.arrayUnion(...selectedTickets)
-    });
-
-    await batch.commit();
-
-    userBalance -= totalCost;
-    updateBalanceUI();
-    alert(`Successfully purchased ${selectedTickets.length} cartel(s)!`);
-  } catch (err) {
-    console.error("Cartel purchase error:", err);
-    alert("Failed to lock cartels. They may have already been claimed by another player.");
-  }
-}
 // Initialize listener when WebApp loads
 document.addEventListener("DOMContentLoaded", () => {
   subscribeToGameRound();
@@ -1534,24 +1591,50 @@ function copyReferralLink() {
 document.addEventListener("DOMContentLoaded", () => {
   subscribeToGameRound(); // Starts listening to the global server
 });
-function resetBoardForNewRound() {
-  // 1. Clear all yellow highlights from the Master Board
-  for (let i = 1; i <= 75; i++) {
-    const cell = document.getElementById(`ball-board-${i}`);
-    if (cell) {
-      cell.classList.remove("bg-yellow-500", "text-black", "font-bold");
+
+// Helper: Highlights drawn balls on the Master Board using exact IDs
+function syncDrawnBallsToUI(drawnBalls, lastDrawn) {
+    // Keep global drawn numbers synced for your existing win-check function
+    window.drawnNumbers = drawnBalls;
+
+    // Highlight each drawn ball on master board (ID pattern: master-num-X)
+    drawnBalls.forEach(ball => {
+        const masterCell = document.getElementById(`master-num-${ball}`);
+        if (masterCell) {
+            masterCell.classList.add("bg-yellow-500", "text-black", "font-bold");
+        }
+    });
+
+    // Update current drawn ball display
+    const lastBallElem = document.getElementById("ticket-ball-text");
+    if (lastBallElem) lastBallElem.innerText = lastDrawn;
+
+    // Update ball count indicator
+    const countElem = document.getElementById("ticket-draw-count");
+    if (countElem) countElem.innerText = `${drawnBalls.length}/75`;
+
+    // Re-render your local ticket matrices to reflect newly drawn numbers
+    if (typeof renderTicketMatrices === 'function') {
+        renderTicketMatrices();
     }
-  }
-  
-  // 2. Reset local selections
-  selectedTickets = [];
-  updateSelectedCount(); // Updates the UI showing "0 selected"
-  
-  // 3. Clear the "Current Ball" display text
-  const lastBallElem = document.getElementById("current-ball-display"); // Update ID if needed (e.g., 'ticket-ball-text')
-  if (lastBallElem) lastBallElem.innerText = "--";
-  
-  console.log("Board reset for new round.");
+}
+
+// Helper: Clears master board highlights for the next round
+function resetMasterBoardUI() {
+    for (let i = 1; i <= 75; i++) {
+        const cell = document.getElementById(`master-num-${i}`);
+        if (cell) {
+            cell.classList.remove("bg-yellow-500", "text-black", "font-bold");
+        }
+    }
+
+    const lastBallElem = document.getElementById("ticket-ball-text");
+    if (lastBallElem) lastBallElem.innerText = "--";
+
+    const countElem = document.getElementById("ticket-draw-count");
+    if (countElem) countElem.innerText = "0/75";
+
+    document.getElementById("cartel-grid")?.classList.remove("pointer-events-none", "opacity-75");
 }
 </script>
 </body>
