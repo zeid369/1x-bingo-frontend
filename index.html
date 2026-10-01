@@ -1103,16 +1103,23 @@ setInterval(syncGameState, 1000);
     function startDrawingPhase() {
       // 👇 ADD IT HERE (at the very start of the function)
     async function incrementGamesPlayed() {
-        if (!window.currentUserId || window.currentUserId === "00000") return;
-        try {
-            const userRef = db.collection("users").doc(window.currentUserId);
-            await userRef.update({
-                total_games_played: firebase.firestore.FieldValue.increment(1)
-            });
-        } catch (err) {
-            console.error("Error incrementing games played:", err);
+    if (!window.currentUserId || window.currentUserId === "00000") return;
+    try {
+        const userRef = db.collection("users").doc(window.currentUserId);
+        // Fix: Use set with merge to prevent silent failures
+        await userRef.set({
+            total_games_played: firebase.firestore.FieldValue.increment(1)
+        }, { merge: true });
+
+        // Fix: Instantly update the Profile Page UI
+        const playedEl = document.getElementById("stat-games-played");
+        if (playedEl) {
+            playedEl.innerText = parseInt(playedEl.innerText || 0) + 1;
         }
+    } catch (err) {
+        console.error("Error incrementing games played:", err);
     }
+}
     incrementGamesPlayed();
       if (selectedTickets.length === 0) {
         timeLeft = 30;
