@@ -948,24 +948,76 @@ async function syncGameState() {
         const response = await fetch('/api/game-state', {
             method: 'GET',
             headers: {
-                'X-Telegram-Init-Data': window.Telegram.WebApp.initData
+                'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || ''
             }
         });
 
+        if (!response.ok) {
+            console.error("Server sync error:", response.status);
+            return;
+        }
+
         const data = await response.json();
         if (data.status === 'success') {
-            handleServerGameState(data.game_state);
-            
-            // Update balance if available
-            if (data.user_balance !== undefined) {
-                const balanceEl = document.getElementById('user-balance');
-                if (balanceEl) balanceEl.innerText = `${data.user_balance} ETB`;
-            }
+            updateGlobalUI(data.game_state);
         }
     } catch (error) {
-        console.error("Error syncing game state:", error);
+        console.error("Network error during sync:", error);
     }
 }
+
+function updateGlobalUI(state) {
+    const countdownEl = document.getElementById('countdown');
+    const timerBarEl = document.getElementById('timer-bar');
+
+    // 1. COUNTDOWN PHASE
+    if (state.phase === 'countdown') {
+        const sec = state.remaining_seconds;
+        const formattedSec = sec < 10 ? `0${sec}` : `${sec}`;
+        
+        if (countdownEl) countdownEl.innerText = `00:${formattedSec}`;
+        if (timerBarEl) timerBarEl.style.width = `${(sec / 30) * 100}%`;
+
+        // Reset local board if starting a new round
+        if (localDrawnCount > 0 && state.drawn_balls.length === 0) {
+            localDrawnCount = 0;
+            if (typeof drawnNumbers !== 'undefined') drawnNumbers = [];
+            resetMasterBoardUI();
+        }
+    } 
+    // 2. DRAWING PHASE
+    else if (state.phase === 'drawing') {
+        if (countdownEl) countdownEl.innerText = "LIVE DRAW";
+        if (timerBarEl) timerBarEl.style.width = "100%";
+
+        // Sync drawn balls from server
+        if (state.drawn_balls.length > localDrawnCount) {
+            for (let i = localDrawnCount; i < state.drawn_balls.length; i++) {
+                const drawnNum = state.drawn_balls[i];
+                processNewDrawnBall(drawnNum, i + 1);
+            }
+            localDrawnCount = state.drawn_balls.length;
+        }
+    }
+    // 3. FINISHED PHASE
+    else if (state.phase === 'finished') {
+        if (countdownEl) countdownEl.innerText = "ROUND OVER";
+        if (timerBarEl) timerBarEl.style.width = "0%";
+    }
+}
+
+function resetMasterBoardUI() {
+    for (let i = 1; i <= 75; i++) {
+        const masterCell = document.getElementById(`master-num-${i}`);
+        if (masterCell) {
+            masterCell.className = 'h-5 bg-slate-800 text-slate-400 font-mono text-[11px] flex items-center justify-center border border-slate-900';
+        }
+    }
+}
+
+// Execute immediately, then poll every second
+syncGameState();
+setInterval(syncGameState, 1000);
 
 function handleServerGameState(state) {
     const countdownEl = document.getElementById('countdown');
