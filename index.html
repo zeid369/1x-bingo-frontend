@@ -1534,38 +1534,97 @@ function copyReferralLink() {
         });
     }
 }
-import { doc, onSnapshot, updateDoc, increment } from "firebase/firestore"; 
-// Assume 'db' is your initialized Firestore client
+import { doc, getDoc, updateDoc, onSnapshot, increment } from "firebase/firestore";
 
 const gameRef = doc(db, "game_room", "state");
+let isHostingCountdown = false;
 
-// 1. Listen for global state changes from the Python server
-onSnapshot(gameRef, (docSnap) => {
+// 1. Listen to global state changes in real time
+onSnapshot(gameRef, async (docSnap) => {
     if (!docSnap.exists()) return;
-    const data = docSnap.data();
+    data = docSnap.data();
 
     const timerDisplay = document.getElementById("timer-display");
     const currentBallDisplay = document.getElementById("current-ball");
 
+    // Update UI based on global status
     if (data.status === 'WAITING_FOR_PLAYERS') {
         timerDisplay.innerText = "Waiting for players to buy a cartel...";
-        currentBallDisplay.innerText = "";
+        if (currentBallDisplay) currentBallDisplay.innerText = "";
     } 
     else if (data.status === 'COUNTDOWN') {
         timerDisplay.innerText = `Game starts in: ${data.timer}s`;
     } 
     else if (data.status === 'DRAWING') {
         timerDisplay.innerText = "Game in progress!";
-        
-        // Grab the most recently drawn ball from the array
-        if (data.drawn_numbers.length > 0) {
+        if (data.drawn_numbers && data.drawn_numbers.length > 0) {
             const latestBall = data.drawn_numbers[data.drawn_numbers.length - 1];
-            currentBallDisplay.innerText = latestBall;
+            if (currentBallDisplay) currentBallDisplay.innerText = latestBall;
             
-            // TODO: Add your logic here to check if 'latestBall' matches a number on the user's cartel
+            // TODO: Check if 'latestBall' matches numbers on the user's green cartel
         }
     }
 });
+
+// 2. Client-side game runner (Replaces the Python backend)
+async function checkAndStartGameLoop(gameRef) {
+    const snap = await getDoc(gameRef);
+    if (!snap.exists()) return;
+    const data = snap.data();
+
+    // If already running or waiting for players with 0 count, do nothing
+    if (isHostingCountdown || data.active_players <= 0) return;
+
+    // If state is waiting, kick off the countdown
+    if (data.status === 'WAITING_FOR_PLAYERS' || data.status === 'COUNTDOWN') {
+        isHostingCountdown = true;
+        
+        await updateDoc(gameRef, { status: 'COUNTDOWN', timer: 30 });
+
+        let currentTimer = 30;
+        const countdownInterval = setInterval(async () => {
+            currentTimer--;
+            if (currentTimer > 0) {
+                await updateDoc(gameRef, { timer: currentTimer });
+            } else {
+                clearInterval(countdownInterval);
+                // Time's up! Start drawing balls
+                startDrawingPhase(gameRef);
+            }
+        }, 1000);
+    }
+}
+
+// 3. Draw balls every 2 seconds and push to Firestore
+async function startDrawingPhase(gameRef) {
+    const bingoPool = [];
+    ['B', 'I', 'N', 'G', 'O'].forEach((letter, idx) => {
+        const start = idx * 15 + 1;
+        for (let i = start; i < start + 15; i++) {
+            bingoPool.push(`${letter}-${i}`);
+        }
+    });
+    
+    // Shuffle pool
+    bingoPool.sort(() => Math.random() - 0.5);
+    let drawn = [];
+
+    await updateDoc(gameRef, { status: 'DRAWING', drawn_numbers: [] });
+
+    let index = 0;
+    const drawInterval = setInterval(async () => {
+        if (index < bingoPool.length) {
+            drawn.push(bingoPool[index]);
+            await updateDoc(gameRef, { drawn_numbers: drawn });
+            index++;
+        } else {
+            clearInterval(drawInterval);
+            isHostingCountdown = false;
+            // Reset for next game
+            await updateDoc(gameRef, { status: 'WAITING_FOR_PLAYERS', timer: 30, active_players: 0 });
+        }
+    }, 2000);
+}
 
 // 2. Unpause the global game when a player buys a cartel
 async function buyCartel() {
@@ -1584,6 +1643,26 @@ window.addEventListener("beforeunload", async () => {
         active_players: increment(-1)
     });
 });
+// Call this function when the user clicks/buys a cartel
+async function handleCartelSelection(cartelElement, cartelId) {
+    // 1. INSTANT UI FEEDBACK (Turns green and closes popup immediately)
+    cartelElement.classList.add("green"); // Make sure your CSS has a .green class for cartels
+    closePopup(); // Close your modal popup instantly
+
+    try {
+        // 2. Update Firebase in the background
+        const gameRef = doc(db, "game_room", "state");
+        await updateDoc(gameRef, {
+            active_players: increment(1)
+        });
+        
+        // Check if we need to kick off the timer (if this is the first player)
+        checkAndStartGameLoop(gameRef);
+        
+    } catch (error) {
+        console.error("Error syncing cartel choice:", error);
+    }
+}
 </script>
 </body>
 </html>
