@@ -62,7 +62,7 @@
     <div class="bg-xbet-dark px-3 py-1.5 rounded-lg border border-xbet-border flex flex-col items-end text-xs">
       <div class="flex items-center space-x-2">
         <span class="text-xbet-green font-bold text-[10px] tracking-wider">PLAY WALLET</span>
-        <span id="play-wallet" class="font-mono font-bold text-white text-sm">500.00</span>
+        <span id="play-wallet" class="font-mono font-bold text-white text-sm">0.00</span>
       </div>
       <div class="flex items-center space-x-2 mt-0.5">
         <span class="text-yellow-400 font-bold text-[10px] tracking-wider">MAIN WALLET</span>
@@ -203,7 +203,7 @@
           </div>
           <div class="text-sm font-bold text-gray-300 mb-8 flex items-center space-x-2">
             <span>መጫወቻ ሂሳብ:</span>
-            <span id="wallet-page-play" class="text-cyan-400 font-mono text-base">500.00 ETB</span>
+            <span id="wallet-page-play" class="text-cyan-400 font-mono text-base">0.00 ETB</span>
           </div>
           <div class="flex space-x-4 w-full">
     <!-- 🟢 Added onclick="triggerDeposit()" here -->
@@ -439,18 +439,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (response.ok) {
             const data = await response.json();
             if (data.status === 'success') {
-                // Update balance displays
-                if (typeof userPlayBalance !== 'undefined') userPlayBalance = data.balance;
-                if (document.getElementById('play-wallet')) document.getElementById('play-wallet').innerText = data.balance.toFixed(2);
-                if (document.getElementById('wallet-page-play')) document.getElementById('wallet-page-play').innerText = `${data.balance.toFixed(2)} ETB`;
-
-                // Render the transaction history safely
-                renderTransactionHistory(data.transactions || []);
-
-                // Phone number handling
-                window.currentUserPhone = data.phone_number || "Not Provided";
-                if (document.getElementById('header-user-phone')) document.getElementById('header-user-phone').innerText = window.currentUserPhone;
-                if (document.getElementById('profile-user-phone')) document.getElementById('profile-user-phone').innerText = window.currentUserPhone;
+                applyUserData(data);
             }
         } else {
             const historyElem = document.getElementById('transaction-history-container') || document.getElementById('transaction-history-list');
@@ -474,46 +463,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Update ID in profile section
     if (document.getElementById('profile-user-id')) document.getElementById('profile-user-id').innerText = window.currentUserId;
-   try {
-    const userIdStr = String(window.currentUserId).trim();
-    const userDocSnap = await window.db.collection("users").doc(userIdStr).get();
-
-   if (userDocSnap.exists) {
-    const userData = userDocSnap.data();
-    window.currentUserPhone = userData.phone_number || "Not Provided";
-    
-    // 1. Update Phone Numbers
-    document.getElementById("profile-user-phone").innerText = window.currentUserPhone;
-    const topPhoneElement = document.getElementById("header-user-phone");
-    if (topPhoneElement) topPhoneElement.innerText = window.currentUserPhone;
-
-    // 2. Update Stats (Keep this INSIDE the exists block so userData is in scope!)
-    const gamesPlayed = userData.total_games_played || 0;
-    const totalWon = userData.total_winnings || 0;
-
-    const playedElement = document.getElementById("stat-games-played");
-    if (playedElement) {
-        playedElement.innerText = gamesPlayed;
-    }
-
-    const wonElement = document.getElementById("stat-games-won");
-    if (wonElement) {
-        wonElement.innerText = totalWon.toFixed(2) + " ETB";
-    }
-
-} else {
-    document.getElementById("profile-user-phone").innerText = "Not Provided";
-    const topPhoneElement = document.getElementById("header-user-phone");
-    if (topPhoneElement) topPhoneElement.innerText = "Not Provided";
-
-    // Optional: Set default 0s if document doesn't exist yet
-    document.getElementById("stat-games-played").innerText = "0";
-    document.getElementById("stat-games-won").innerText = "0.00 ETB";
-}
-} catch (error) {
-    console.error("Error fetching phone number:", error);
-}
-
 const profileHelpBtn = document.getElementById('profile-help-btn');
 
 if (profileHelpBtn) {
@@ -575,48 +524,29 @@ const rulesBtn = document.getElementById('game-rules-btn');
     }
 });
 
-// 👇 PASTE THE TWO ACTION FUNCTIONS RIGHT HERE 👇
-
-function recordGameStarted(roundId) {
-    const userId = window.currentUserId || (window.Telegram?.WebApp?.initDataUnsafe?.user?.id);
-    if (!userId) return;
-
-    fetch('/api/update_stats', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            user_id: userId,
-            round_id: roundId
-        })
-    })
-    .then(response => response.json())
-    .catch(err => console.error("Error updating games played:", err));
-}
-
-function recordGameWon(amountWon) {
-    const userId = window.currentUserId || (window.Telegram?.WebApp?.initDataUnsafe?.user?.id);
-    if (!userId) return;
-    
-    fetch('/api/update_stats', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            user_id: userId,
-            win_amount: amountWon
-        })
-    })
-    .then(response => response.json())
-    .catch(err => console.error("Error updating winnings:", err));
-}
     const MAX_SELECTION = 4;
     const TICKET_PRICE = 10;
-    const PRIZE_PER_CARTEL = 8;
-    let userPlayBalance = 0.00;
-    let selectedTickets = [];
+    const API_BASE = 'https://onex-bingo-backend.onrender.com';
+
+    let serverBalance = 0;          // the real balance, from the server
+    let userPlayBalance = 0;        // what is shown: balance minus cartels picked for the coming round
+    let balanceRefreshing = false;
+    let selectedTickets = [];       // my cartels in the current round (from the server)
+    let takenCartels = new Set();   // every picked cartel (mine + other players')
     let isDrawingPhase = false;
     let drawnNumbers = [];
-    let drawInterval = null;
     let currentPage = 'home';
+
+    let round = null;               // latest round state from the server
+    let clockOffset = 0;            // server clock minus phone clock (seconds)
+    let lastRoundId = null;
+    let lastPhase = null;
+    let lastSeq = -1;
+    let lastDrawnCount = 0;
+    let shownResultFor = null;
+    let pollBusy = false;
+    let pickBusy = false;
+    let gridState = [];
 
     // Page Elements
     const pageHome = document.getElementById('page-home');
@@ -660,6 +590,22 @@ function recordGameWon(amountWon) {
     const winnerModal = document.getElementById('winner-modal');
     const winnersListContainer = document.getElementById('winners-list-container');
 
+    // ---------- helpers ----------
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(API_BASE + path, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
+        }
+      });
+      return res.json();
+    }
+
     // Navigation Logic
     function switchPage(page) {
       currentPage = page;
@@ -701,20 +647,6 @@ function recordGameWon(amountWon) {
       }
     }
 
-    // Profile Link Copy Feature
-    function copyReferralLink() {
-      const btn = document.getElementById('btn-copy-link');
-      btn.innerText = 'Copied!';
-      btn.classList.replace('bg-xbet-blue', 'bg-xbet-teal');
-      btn.classList.replace('text-white', 'text-black');
-      
-      setTimeout(() => {
-        btn.innerText = 'Copy';
-        btn.classList.replace('bg-xbet-teal', 'bg-xbet-blue');
-        btn.classList.replace('text-black', 'text-white');
-      }, 2000);
-    }
-
     // Toggle Master Board (Accordion)
     function toggleMasterBoard() {
       collapsibleMasterBoard.classList.toggle('hidden');
@@ -725,16 +657,33 @@ function recordGameWon(amountWon) {
       }
     }
 
-    // Initialize 500 Cartels Grid
+    // ---------- the 500-cartel grid ----------
+    const CLS_FREE  = 'h-9 bg-xbet-blue hover:bg-slate-700 text-white font-bold text-xs rounded border border-xbet-border/80 flex items-center justify-center transition-all duration-150 active:scale-95 shadow-sm';
+    const CLS_MINE  = 'h-9 bg-xbet-green text-black font-black text-xs rounded border border-green-300 flex items-center justify-center';
+    const CLS_TAKEN = 'h-9 bg-slate-800 text-slate-600 font-bold text-xs rounded border border-slate-700 flex items-center justify-center opacity-50 cursor-not-allowed';
+
     function initGrid() {
       gridContainer.innerHTML = '';
+      gridState = [];
       for (let i = 1; i <= 500; i++) {
         const btn = document.createElement('button');
         btn.id = `cartel-${i}`;
-        btn.className = 'h-9 bg-xbet-blue hover:bg-slate-700 text-white font-bold text-xs rounded border border-xbet-border/80 flex items-center justify-center transition-all duration-150 active:scale-95 shadow-sm';
+        btn.className = CLS_FREE;
         btn.innerText = i;
         btn.onclick = () => toggleCartel(i);
         gridContainer.appendChild(btn);
+      }
+    }
+
+    // Only restyle the cells whose state changed since the last poll.
+    function paintGrid() {
+      const mine = new Set(selectedTickets);
+      for (let i = 1; i <= 500; i++) {
+        const st = mine.has(i) ? 'mine' : (takenCartels.has(i) ? 'taken' : 'free');
+        if (gridState[i] === st) continue;
+        gridState[i] = st;
+        const btn = document.getElementById(`cartel-${i}`);
+        if (btn) btn.className = st === 'mine' ? CLS_MINE : st === 'taken' ? CLS_TAKEN : CLS_FREE;
       }
     }
 
@@ -770,43 +719,53 @@ function recordGameWon(amountWon) {
       });
     }
 
-    function toggleCartel(id) {
-      if (isDrawingPhase) return;
-      const btn = document.getElementById(`cartel-${id}`);
-      const index = selectedTickets.indexOf(id);
-
-      if (index > -1) {
-        selectedTickets.splice(index, 1);
-        userPlayBalance += TICKET_PRICE;
-        // 🟢 ADD THIS LINE (Refund +10 to Firebase):
-        syncBalanceToFirestore(TICKET_PRICE);
-
-        btn.className = 'h-9 bg-xbet-blue hover:bg-slate-700 text-white font-bold text-xs rounded border border-xbet-border/80 flex items-center justify-center';
-    } else {
-        if (selectedTickets.length >= MAX_SELECTION) return;
-        if (userPlayBalance < TICKET_PRICE) {
-            alert('የጨዋታ ሂሳብዎ በቂ አይደለም!');
-            return;
-        }
-        selectedTickets.push(id);
-        userPlayBalance -= TICKET_PRICE;
-
-        // 🟢 ADD THIS LINE (Deduct -10 from Firebase):
-        syncBalanceToFirestore(-TICKET_PRICE);
-
-        btn.className = 'h-9 bg-xbet-green text-black font-black text-xs rounded border border-green-300 flex items-center justify-center';
+    function pickErrorText(code) {
+      switch (code) {
+        case 'taken':     return 'ይህ ካርቴል ቀድሞ ተመርጧል!';
+        case 'full':      return `ቢበዛ ${MAX_SELECTION} ካርቴል ብቻ መምረጥ ይችላሉ`;
+        case 'balance':   return 'የጨዋታ ሂሳብዎ በቂ አይደለም!';
+        case 'phase':     return 'ምርጫ ተዘግቷል፣ ቀጣዩን ዙር ይጠብቁ';
+        case 'slow_down': return '';
+        default:          return 'አልተሳካም፣ እንደገና ይሞክሩ';
+      }
     }
-      updateUI();
-      renderPopupCartels();
-      renderTicketMatrices();
+
+    // Tapping a cartel asks the server. The server decides (taken? balance? time left?).
+    async function toggleCartel(id) {
+      if (!round || round.phase !== 'selection' || pickBusy) return;
+      const mine = selectedTickets.includes(id);
+      if (!mine && takenCartels.has(id)) { alert(pickErrorText('taken')); return; }
+      if (!mine && selectedTickets.length >= MAX_SELECTION) { alert(pickErrorText('full')); return; }
+      if (!mine && userPlayBalance < TICKET_PRICE) { alert(pickErrorText('balance')); return; }
+      pickBusy = true;
+      try {
+        const res = await api(mine ? '/api/round/unpick' : '/api/round/pick', {
+          method: 'POST',
+          body: JSON.stringify({ cartel: id })
+        });
+        if (res.state) applyRound(res.state);
+        if (res.status !== 'success') {
+          const msg = pickErrorText(res.code);
+          if (msg) alert(msg);
+        }
+      } catch (err) {
+        console.error('pick failed', err);
+        alert(pickErrorText('network'));
+      } finally {
+        pickBusy = false;
+      }
     }
 
     function updateUI() {
-      playWalletDisplay.innerText = userPlayBalance.toFixed(2);
-      walletPagePlay.innerText = userPlayBalance.toFixed(2) + ' ETB';
+      const reserved = (round && round.phase === 'selection') ? selectedTickets.length * TICKET_PRICE : 0;
+      userPlayBalance = serverBalance - reserved;
+      if (!balanceRefreshing) {
+        playWalletDisplay.innerText = userPlayBalance.toFixed(2);
+        walletPagePlay.innerText = userPlayBalance.toFixed(2) + ' ETB';
+      }
       selectedCountDisplay.innerText = selectedTickets.length;
-      
-      const poolPrize = selectedTickets.length * PRIZE_PER_CARTEL;
+
+      const poolPrize = round ? Number(round.pool) : 0;
       document.getElementById('jackpot-display').innerText = poolPrize.toFixed(2);
       document.getElementById('floating-jackpot').innerText = `${poolPrize.toFixed(2)} ETB`;
       ticketPrizePool.innerText = `${poolPrize.toFixed(2)} ETB`;
@@ -822,6 +781,8 @@ function recordGameWon(amountWon) {
         ticketMatricesContainer.classList.add('hidden');
       }
     }
+
+    // The card a player sees. The server generates the very same card to check wins.
     function seededRandom(seed) { let x = Math.sin(seed++) * 10000; return x - Math.floor(x); }
 
     function generateMatrix(ticketId) {
@@ -836,34 +797,6 @@ function recordGameWon(amountWon) {
         matrix.push(colNumbers);
       }
       return matrix;
-    }
-
-    function checkBingo(matrix, drawn) {
-      for (let r = 0; r < 5; r++) {
-        let win = true;
-        for (let c = 0; c < 5; c++) {
-          if (r === 2 && c === 2) continue;
-          if (!drawn.includes(matrix[c][r])) { win = false; break; }
-        }
-        if (win) return true;
-      }
-      for (let c = 0; c < 5; c++) {
-        let win = true;
-        for (let r = 0; r < 5; r++) {
-          if (r === 2 && c === 2) continue;
-          if (!drawn.includes(matrix[c][r])) { win = false; break; }
-        }
-        if (win) return true;
-      }
-      let d1 = true, d2 = true;
-      for (let i = 0; i < 5; i++) {
-        if (i !== 2 && !drawn.includes(matrix[i][i])) d1 = false;
-        if (i !== 2 && !drawn.includes(matrix[4 - i][i])) d2 = false;
-      }
-      if (d1 || d2) return true;
-      if (drawn.includes(matrix[0][0]) && drawn.includes(matrix[4][0]) && 
-          drawn.includes(matrix[0][4]) && drawn.includes(matrix[4][4])) return true;
-      return false;
     }
 
     function renderPopupCartels() {
@@ -941,298 +874,198 @@ let html = `
       });
     }
 
-let localDrawnCount = 0; // Tracks processed balls for audio calls
-
-async function syncGameState() {
-    try {
-        const response = await fetch('/api/game-state', {
-            method: 'GET',
-            headers: {
-                'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || ''
-            }
-        });
-
-        if (!response.ok) {
-            console.error("Server sync error:", response.status);
-            return;
-        }
-
-        const data = await response.json();
-        if (data.status === 'success') {
-            updateGlobalUI(data.game_state);
-        }
-    } catch (error) {
-        console.error("Network error during sync:", error);
-    }
-}
-
-function updateGlobalUI(state) {
-    const countdownEl = document.getElementById('countdown');
-    const timerBarEl = document.getElementById('timer-bar');
-
-    // 1. COUNTDOWN PHASE
-    if (state.phase === 'countdown') {
-        const sec = state.remaining_seconds;
-        const formattedSec = sec < 10 ? `0${sec}` : `${sec}`;
-        
-        if (countdownEl) countdownEl.innerText = `00:${formattedSec}`;
-        if (timerBarEl) timerBarEl.style.width = `${(sec / 30) * 100}%`;
-
-        // Reset local board if starting a new round
-        if (localDrawnCount > 0 && state.drawn_balls.length === 0) {
-            localDrawnCount = 0;
-            if (typeof drawnNumbers !== 'undefined') drawnNumbers = [];
-            resetMasterBoardUI();
-        }
-    } 
-    // 2. DRAWING PHASE
-    else if (state.phase === 'drawing') {
-        if (countdownEl) countdownEl.innerText = "LIVE DRAW";
-        if (timerBarEl) timerBarEl.style.width = "100%";
-
-        // Sync drawn balls from server
-        if (state.drawn_balls.length > localDrawnCount) {
-            for (let i = localDrawnCount; i < state.drawn_balls.length; i++) {
-                const drawnNum = state.drawn_balls[i];
-                processNewDrawnBall(drawnNum, i + 1);
-            }
-            localDrawnCount = state.drawn_balls.length;
-        }
-    }
-    // 3. FINISHED PHASE
-    else if (state.phase === 'finished') {
-        if (countdownEl) countdownEl.innerText = "ROUND OVER";
-        if (timerBarEl) timerBarEl.style.width = "0%";
-    }
-}
-
-function resetMasterBoardUI() {
-    for (let i = 1; i <= 75; i++) {
-        const masterCell = document.getElementById(`master-num-${i}`);
-        if (masterCell) {
-            masterCell.className = 'h-5 bg-slate-800 text-slate-400 font-mono text-[11px] flex items-center justify-center border border-slate-900';
-        }
-    }
-}
-
-// Execute immediately, then poll every second
-syncGameState();
-setInterval(syncGameState, 1000);
-
-function handleServerGameState(state) {
-    const countdownEl = document.getElementById('countdown');
-    const timerBarEl = document.getElementById('timer-bar');
-
-    // 1. COUNTDOWN PHASE
-    if (state.phase === 'countdown') {
-        const seconds = state.remaining_seconds < 10 ? `0${state.remaining_seconds}` : state.remaining_seconds;
-        if (countdownEl) countdownEl.innerText = `00:${seconds}`;
-        if (timerBarEl) timerBarEl.style.width = `${(state.remaining_seconds / 60) * 100}%`;
-        
-        // Reset local tracking when a new round starts
-        if (localDrawnCount > 0 && state.drawn_balls.length === 0) {
-            localDrawnCount = 0;
-            drawnNumbers = [];
-            resetMasterBoardUI();
-        }
-    } 
-    // 2. DRAWING PHASE
-    else if (state.phase === 'drawing') {
-        if (countdownEl) countdownEl.innerText = "LIVE DRAW";
-        if (timerBarEl) timerBarEl.style.width = "100%";
-
-        // Process newly drawn balls sent by server
-        if (state.drawn_balls.length > localDrawnCount) {
-            for (let i = localDrawnCount; i < state.drawn_balls.length; i++) {
-                const drawnNum = state.drawn_balls[i];
-                processNewDrawnBall(drawnNum, i + 1);
-            }
-            localDrawnCount = state.drawn_balls.length;
-        }
-    }
-}
-
-// Helper function preserving your existing ball animation, audio, and master cell styling
-function processNewDrawnBall(drawnNum, currentCount) {
-    drawnNumbers.push(drawnNum);
-
-    // Update counter & ball text
-    if (typeof ticketDrawCount !== 'undefined') ticketDrawCount.innerText = `${currentCount}/75`;
-    if (typeof ticketBallText !== 'undefined') ticketBallText.innerText = drawnNum;
-
-    // Trigger ball animation
-    if (typeof ticketCurrentBall !== 'undefined') {
-        ticketCurrentBall.classList.remove('animate-ball');
-        void ticketCurrentBall.offsetWidth; // Force reflow
-        ticketCurrentBall.classList.add('animate-ball');
+    // ---------- balance and profile (always read from the server) ----------
+    function applyUserData(d) {
+      serverBalance = Number(d.balance) || 0;
+      renderTransactionHistory(d.transactions || []);
+      window.currentUserPhone = d.phone_number || 'Not Provided';
+      ['header-user-phone', 'profile-user-phone'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = window.currentUserPhone;
+      });
+      const played = document.getElementById('stat-games-played');
+      if (played) played.innerText = d.total_games_played || 0;
+      const won = document.getElementById('stat-games-won');
+      if (won) won.innerText = (Number(d.total_winnings) || 0).toFixed(2) + ' ETB';
+      updateUI();
     }
 
-    // Amharic Call & Status Text
-    let letter = drawnNum <= 15 ? 'B' : drawnNum <= 30 ? 'I' : drawnNum <= 45 ? 'N' : drawnNum <= 60 ? 'G' : 'O';
-    if (typeof speakBingoCallAmharic === 'function' && typeof getAmharicBingoCallText === 'function') {
-        speakBingoCallAmharic(getAmharicBingoCallText(drawnNum));
-    }
-    if (typeof ticketStatusText !== 'undefined') {
-        ticketStatusText.innerHTML = `የወጣው ቁጥር: <strong class="text-white ml-1 text-lg">${letter} - ${drawnNum}</strong>`;
-    }
-
-    // Highlight Master Board Cell
-    const masterCell = document.getElementById(`master-num-${drawnNum}`);
-    if (masterCell) {
-        const activeBg = masterCell.getAttribute('data-active-bg') || 'bg-yellow-500';
-        masterCell.className = `h-5 ${activeBg} text-white font-mono font-black text-[11px] flex items-center justify-center border border-slate-900 shadow-inner`;
+    async function refreshUserData() {
+      balanceRefreshing = true;     // don't flash a half-updated balance while we fetch
+      try {
+        const d = await api('/api/user-data');
+        if (d.status === 'success') applyUserData(d);
+      } catch (err) {
+        console.error('Could not refresh balance', err);
+      } finally {
+        balanceRefreshing = false;
+        updateUI();
+      }
     }
 
-    // Render matrices
-    if (typeof renderTicketMatrices === 'function') renderTicketMatrices();
-    if (typeof renderPopupCartels === 'function') renderPopupCartels();
-}
-
-function resetMasterBoardUI() {
-    for (let i = 1; i <= 75; i++) {
-        const masterCell = document.getElementById(`master-num-${i}`);
-        if (masterCell) {
-            masterCell.className = 'h-5 bg-slate-800 text-slate-400 font-mono text-[11px] flex items-center justify-center border border-slate-900';
-        }
+    // ---------- the shared round ----------
+    function markMaster(num) {
+      const cell = document.getElementById(`master-num-${num}`);
+      if (!cell) return;
+      const activeBg = cell.getAttribute('data-active-bg');
+      cell.className = `h-5 ${activeBg} text-white font-mono font-black text-[11px] flex items-center justify-center border border-slate-900 shadow-inner`;
     }
-}
 
-// Start polling every 1 second
-setInterval(syncGameState, 1000);
-
-    function startDrawingPhase() {
-      // 👇 ADD IT HERE (at the very start of the function)
-    async function incrementGamesPlayed() {
-    if (!window.currentUserId || window.currentUserId === "00000") return;
-    try {
-        const userRef = db.collection("users").doc(window.currentUserId);
-        // Fix: Use set with merge to prevent silent failures
-        await userRef.set({
-            total_games_played: firebase.firestore.FieldValue.increment(1)
-        }, { merge: true });
-
-        // Fix: Instantly update the Profile Page UI
-        const playedEl = document.getElementById("stat-games-played");
-        if (playedEl) {
-            playedEl.innerText = parseInt(playedEl.innerText || 0) + 1;
-        }
-    } catch (err) {
-        console.error("Error incrementing games played:", err);
+    function showBall(num, count, speak) {
+      ticketDrawCount.innerText = `${count}/75`;
+      ticketBallText.innerText = num;
+      ticketCurrentBall.classList.remove('animate-ball');
+      void ticketCurrentBall.offsetWidth;
+      ticketCurrentBall.classList.add('animate-ball');
+      const letter = num <= 15 ? 'B' : num <= 30 ? 'I' : num <= 45 ? 'N' : num <= 60 ? 'G' : 'O';
+      if (speak) speakBingoCallAmharic(getAmharicBingoCallText(num));
+      ticketStatusText.innerHTML = `የወጣው ቁጥር: <strong class="text-white ml-1 text-lg">${letter} - ${num}</strong>`;
     }
-}
-    incrementGamesPlayed();
-      if (selectedTickets.length === 0) {
-        timeLeft = 30;
+
+    function statusText(s) {
+      if (s.phase === 'selection') {
+        return s.players < s.min_players
+          ? `ተጫዋቾችን በመጠበቅ ላይ (${s.players}/${s.min_players})`
+          : 'ጨዋታው ሊጀምር ነው';
+      }
+      if (s.phase === 'locking') return 'ካርቴሎች እየተቆለፉ ነው...';
+      if (s.phase === 'result') return 'ጨዋታው ተጠናቋል';
+      return 'ጨዋታው ተጀምሯል (እጣ እየወጣ ነው)';
+    }
+
+    function showResult(s) {
+      const winners = s.winners || [];
+      if (s.no_winner || winners.length === 0) {
+        ticketStatusText.innerText = 'ምንም አሸናፊ የለም';
         return;
       }
-      isDrawingPhase = true;
-      // 🟢 ADD THIS LINE: Log the played cartels to the leaderboard
-      updateWeeklyCartels(selectedTickets.length);
-      popupPanel.classList.add('hidden');
-      gameStatusLabel.innerText = 'ጨዋታው ተጀምሯል (እጣ እየወጣ ነው)';
-      
-      if (currentPage === 'home') switchPage('ticket');
-
-      initMasterBoard();
-      const pool = Array.from({ length: 75 }, (_, i) => i + 1);
-      const shuffled = [...pool].sort(() => Math.random() - 0.5);
-
-      drawnNumbers = [];
-      let drawCount = 0;
-      let winningList = [];
-
-      drawInterval = setInterval(() => {
-        if (drawCount >= shuffled.length) {
-          clearInterval(drawInterval);
-          if (winningList.length === 0) {
-            finishRound([]);
-          }
-          return;
-        }
-
-        const nextNumber = shuffled[drawCount++];
-        processNewDrawnBall(nextNumber, drawCount);
-
-        selectedTickets.forEach(ticketId => {
-          if (checkBingo(generateMatrix(ticketId), drawnNumbers)) {
-            const existingWinner = winningList.find(w => w.cartel === ticketId);
-            if (!existingWinner) {
-              winningList.push({
-                name: `${window.currentUserName || 'Player'} (እርስዎ)`,
-                phone: window.currentUserPhone || 'Unknown',
-                cartel: ticketId
-              });
-            }
-          }
-        });
-
-        if (winningList.length > 0) {
-          clearInterval(drawInterval);
-          setTimeout(() => finishRound(winningList), 1500);
-        }
-      }, 2000);
-    }
-
-    function finishRound(winners) {
-      if (winners.length === 0) {
-        alert('ምንም አሸናፊ የለም');
-        closeWinnerModal();
-        return;
-      }
-      speakBingoCallAmharic("ቢንጎ!");
-      const poolPrize = selectedTickets.length * PRIZE_PER_CARTEL;
-      const shareAmount = (poolPrize / winners.length);
-      document.getElementById('winner-total-prize').innerText = `${poolPrize.toFixed(2)} ETB`;
+      const cartels = winners.map(w => `#${w.cartel}`).join(', ');
+      ticketStatusText.innerHTML = `ቢንጎ! አሸናፊ ካርቴል: <strong class="text-white ml-1">${esc(cartels)}</strong>`;
+      if (selectedTickets.length === 0) return;      // spectators only see the status line
+      speakBingoCallAmharic('ቢንጎ!');
+      document.getElementById('winner-total-prize').innerText = `${Number(s.pool).toFixed(2)} ETB`;
+      document.getElementById('winner-share-status').innerText = winners.length > 1 ? 'በጋራ አሸንፈዋል!' : '';
       document.getElementById('winners-count-label').innerText = `አሸናፊዎች (${winners.length})`;
-
-      winnersListContainer.innerHTML = '';
-      winners.forEach(w => {
-        winnersListContainer.innerHTML += `
+      winnersListContainer.innerHTML = winners.map(w => `
           <div class="bg-xbet-card border border-xbet-border rounded-lg p-2 flex justify-between items-center text-left">
             <div class="flex items-center space-x-2">
               <div class="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-xs"><i class="fa-solid fa-user"></i></div>
               <div>
-                <div class="text-xs text-teal-300 font-bold">${w.name}</div>
-                <div class="text-[9px] text-gray-400 font-mono">ስልክ: ${w.phone} | ካርቴል: <span class="text-teal-400 font-bold">#${w.cartel}</span></div>
+                <div class="text-xs text-teal-300 font-bold">${esc(w.name)}${w.mine ? ' (እርስዎ)' : ''}</div>
+                <div class="text-[9px] text-gray-400 font-mono">${w.phone ? 'ስልክ: ' + esc(w.phone) + ' | ' : ''}ካርቴል: <span class="text-teal-400 font-bold">#${w.cartel}</span></div>
               </div>
             </div>
-            <div class="text-xs font-black text-yellow-400 font-mono tracking-wide">${shareAmount.toFixed(2)} ETB</div>
-          </div>
-        `;
-        userPlayBalance += shareAmount;
-        // 🟢 ADD THIS LINE HERE (Saves win payout to Firestore):
-        syncBalanceToFirestore(shareAmount);
-       // 👇 ADD IT HERE (right below your balance update)
-       if (w.userId === window.currentUserId) { // Optional safety check if it's the current user winning
-        const userRef = db.collection("users").doc(window.currentUserId);
-        userRef.update({
-            total_winnings: firebase.firestore.FieldValue.increment(shareAmount)
-        }).catch(err => console.error("Error updating total winnings:", err));
-      } 
-    });
+            <div class="text-xs font-black text-yellow-400 font-mono tracking-wide">${Number(w.prize).toFixed(2)} ETB</div>
+          </div>`).join('');
+      winnerModal.classList.remove('hidden');
+    }
 
-    winnerModal.classList.remove('hidden');
-    updateUI();
+    // Everything on screen comes from this one function.
+    function applyRound(s) {
+      // ignore an older answer that arrives after a newer one
+      if (round && s.round_id === round.round_id && s.seq < round.seq) return;
+
+      clockOffset = s.server_time - Date.now() / 1000;
+      const newRound = s.round_id !== lastRoundId;
+      const phaseChanged = lastPhase !== null && lastPhase !== s.phase;
+      const prevPhase = lastPhase;
+
+      round = s;
+      selectedTickets = s.my_cartels.slice();
+      takenCartels = new Set(s.taken);
+      isDrawingPhase = s.phase !== 'selection';
+      drawnNumbers = s.drawn;
+      lastPhase = s.phase;
+
+      if (newRound) {
+        lastRoundId = s.round_id;
+        lastDrawnCount = 0;
+        gridState = [];
+        initMasterBoard();
+        ticketBallText.innerText = '--';
+        ticketStatusText.innerText = 'ገና አልጀመረም...';
+        ticketDrawCount.innerText = '0/75';
+        winnerModal.classList.add('hidden');
       }
+      // money may have moved (charged, won, refunded): read the real balance again
+      if (newRound || phaseChanged) refreshUserData();
+
+      // newly drawn balls
+      const n = s.drawn.length;
+      if (n < lastDrawnCount) lastDrawnCount = 0;
+      if (n > lastDrawnCount) {
+        const fresh = s.drawn.slice(lastDrawnCount);
+        fresh.forEach(markMaster);
+        showBall(s.drawn[n - 1], n, fresh.length <= 3);   // a late joiner doesn't hear 30 calls at once
+        lastDrawnCount = n;
+      }
+
+      gameStatusLabel.innerText = statusText(s);
+
+      if (s.phase === 'drawing' && prevPhase !== 'drawing' && selectedTickets.length > 0 && currentPage === 'home') {
+        switchPage('ticket');
+      }
+      if (s.phase === 'result' && shownResultFor !== s.round_id) {
+        shownResultFor = s.round_id;
+        showResult(s);
+      }
+
+      paintGrid();
+      updateUI();
+      if (s.seq !== lastSeq || phaseChanged) {
+        lastSeq = s.seq;
+        renderPopupCartels();
+        renderTicketMatrices();
+      }
+    }
+
+    async function pollRound() {
+      if (pollBusy) return;
+      pollBusy = true;
+      try {
+        const res = await api('/api/round');
+        if (res.state) applyRound(res.state);
+      } catch (err) {
+        console.error('round poll failed', err);
+      } finally {
+        pollBusy = false;
+      }
+    }
+
+    // Countdown runs from the server's clock, so every phone shows the same time.
+    function tickCountdown() {
+      if (!round) return;
+      const countdownEl = document.getElementById('countdown');
+      const bar = document.getElementById('timer-bar');
+      if (round.phase === 'selection') {
+        const left = Math.max(0, Math.ceil(round.phase_ends_at - (Date.now() / 1000 + clockOffset)));
+        const waiting = round.players < round.min_players;
+        const mm = String(Math.floor(left / 60)).padStart(2, '0');
+        const ss = String(left % 60).padStart(2, '0');
+        countdownEl.innerText = waiting ? '--:--' : `${mm}:${ss}`;
+        bar.style.width = waiting ? '100%' : `${Math.min(100, (left / round.selection_seconds) * 100)}%`;
+      } else {
+        countdownEl.innerText = '00:00';
+        bar.style.width = '0%';
+      }
+    }
+
     function closeWinnerModal() {
       winnerModal.classList.add('hidden');
-      isDrawingPhase = false;
-      drawnNumbers = [];
-      selectedTickets = [];
-      timeLeft = 30;
-      
-      ticketBallText.innerText = '--';
-      ticketStatusText.innerText = 'ገና አልጀመረም...';
-      ticketDrawCount.innerText = '0/75';
-      
-      initGrid();
-      updateUI();
-      switchPage('home'); 
+      switchPage('home');
     }
 
     initGrid();
     initMasterBoard();
     updateUI();
+    setInterval(tickCountdown, 250);
+    document.addEventListener('DOMContentLoaded', () => {
+      setInterval(pollRound, 1000);
+      pollRound();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { pollRound(); refreshUserData(); }
+    });
 
 // 1. Paste the main function (transaction history renderer) here
 function renderTransactionHistory(transactions) {
@@ -1248,7 +1081,7 @@ function renderTransactionHistory(transactions) {
     const sortedTx = transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
     historyContainer.innerHTML = sortedTx.map(tx => {
-        const isDeposit = tx.type === 'deposit';
+        const isDeposit = ['deposit', 'win', 'refund'].includes(tx.type);
         const colorClass = isDeposit ? 'text-xbet-green' : 'text-red-500';
         const sign = isDeposit ? '+' : '-';
         const dateStr = new Date(tx.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -1271,219 +1104,12 @@ function renderTransactionHistory(transactions) {
         `;
     }).join('');
 }
-// 2. Trigger Deposit Button Action
-function triggerDeposit() {
-    const input = prompt("Enter deposit amount (ETB):");
-    if (input !== null) {
-        const amount = parseFloat(input);
-        if (!isNaN(amount) && amount > 0) {
-            sendTransactionToBackend('deposit', amount);
-        } else {
-            alert("Please enter a valid positive number.");
-        }
-    }
-}
-
-// 3. Trigger Withdraw Button Action
-function triggerWithdraw() {
-    const input = prompt("Enter withdrawal amount (ETB):");
-    if (input !== null) {
-        const amount = parseFloat(input);
-        if (!isNaN(amount) && amount > 0) {
-            sendTransactionToBackend('withdraw', amount);
-        } else {
-            alert("Please enter a valid positive number.");
-        }
-    }
-}
-
-// 1. Send the data to your Python Flask backend
-async function sendTransactionToBackend(type, amount) {
-    // Use the already-verified global user ID first
-    const userId = window.currentUserId || (window.Telegram?.WebApp?.initDataUnsafe?.user?.id ? window.Telegram.WebApp.initDataUnsafe.user.id.toString() : 'test_user');
-
-    try {
-        const response = await fetch('https://onex-bingo-backend.onrender.com/api/transaction', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
-            },
-            body: JSON.stringify({
-                userId: userId,
-                type: type,
-                amount: amount
-            })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-
-            // Instantly update the balance displayed on screen
-            if (data.balance !== undefined) {
-                userPlayBalance = data.balance;
-                document.getElementById('wallet-page-play').innerText = `${data.balance.toFixed(2)} ETB`;
-                document.getElementById('play-wallet').innerText = data.balance.toFixed(2);
-            }
-
-            // Instantly render the transaction history list
-            if (typeof renderTransactionHistory === 'function' && data.transactions) {
-                renderTransactionHistory(data.transactions);
-            }
-
-            alert(`Successfully ${type}ed ${amount} ETB!`);
-        } else {
-            alert("Server failed to process the transaction.");
-        }
-    } catch (error) {
-        console.error("Error sending transaction:", error);
-        alert("Network error processing transaction.");
-    }
-}
   </script>
   <!-- 1. Telegram WebApp Script -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-<!-- 2. Firebase Scripts (v8 compat for simplicity in plain HTML) -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-
 <script>
-    // 3. YOUR SPECIFIC FIREBASE CONFIG
-    const firebaseConfig = {
-        apiKey: "AIzaSyAhk41BVmMg733yw4uky1TXfU_XorUQhsQ",
-        authDomain: "x-bingo-6e4f0.firebaseapp.com",
-        projectId: "x-bingo-6e4f0",
-        storageBucket: "x-bingo-6e4f0.firebasestorage.app",
-        messagingSenderId: "359373495732",
-        appId: "1:359373495732:web:79e6f679ec27ca6d59a6e1",
-        measurementId: "G-90JZZWJ069"
-    };
-
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    window.db = firebase.firestore();
-
-    // 4. Get the User's Telegram ID automatically
-    const tg = window.Telegram.WebApp;
-    tg.expand();
-    
-    const userId = tg.initDataUnsafe?.user?.id ? tg.initDataUnsafe.user.id.toString() : "TEST_USER_ID"; 
-
-    // 5. Fetch the Balance from Firestore
-async function loadUserBalance() {
-    try {
-        // 1. Check if Telegram provided the ID
-        if (!userId || userId === "TEST_USER_ID") {
-            alert("⚠️ WebApp is running outside Telegram or Telegram ID is missing. Current ID: " + userId);
-        }
-
-        const docRef = db.collection("users").doc(userId);
-        const docSnap = await docRef.get();
-
-        if (docSnap.exists) {
-            const userData = docSnap.data();
-            userPlayBalance = userData.balance || 0.0;
-            
-            // 2. Update the balance text
-            const balanceElement = document.getElementById("balanceDisplay");
-            if (balanceElement) {
-                balanceElement.innerText = userPlayBalance.toFixed(2) + " ETB";
-            }
-            
-            // 3. If your game script has its own function to refresh the screen, trigger it here:
-            if (typeof updateUI === "function") updateUI();
-            if (typeof renderBalance === "function") renderBalance();
-            if (typeof updateBalanceDisplay === "function") updateBalanceDisplay();
-
-        } else {
-            alert("❌ No document found in Firestore for ID: " + userId);
-            userPlayBalance = 0.0;
-            document.getElementById("balanceDisplay").innerText = "0.00 ETB";
-        }
-    } catch (error) {
-        // Pop up the exact error on your phone screen
-        alert("🔥 Firestore Error: " + error.message);
-    }
-}
-    loadUserBalance();
-    async function processCartelPurchaseAndStart() {
-    // 1. Verify ticket selection
-    const totalTickets = selectedTickets.length;
-    if (totalTickets === 0) {
-        alert("እባክዎ ቢያንስ አንድ ካርቴል ይምረጡ! (Please select at least one cartel)");
-        return;
-    }
-
-    const totalCost = totalTickets * TICKET_PRICE;
-
-    // 2. Quick client-side balance check
-    if (userPlayBalance < totalCost) {
-        alert(`❌ በቂ ሂሳብ የሎትም።\n\nየሚያስፈልገው: ${totalCost.toFixed(2)} ETB\nየእርስዎ ሂሳብ: ${userPlayBalance.toFixed(2)} ETB`);
-        return;
-    }
-
-    // Disable purchase button to prevent accidental double clicks
-    const actionBtn = document.getElementById("startGameBtn"); // Replace with your buy/start button ID
-    if (actionBtn) actionBtn.disabled = true;
-
-    try {
-        const userRef = db.collection("users").doc(userId);
-
-        // 3. Execute atomic Firestore transaction (prevents race conditions)
-        await db.runTransaction(async (transaction) => {
-            const userDoc = await transaction.get(userRef);
-
-            if (!userDoc.exists) {
-                throw new Error("ተጠቃሚው በዳታቤዝ ውስጥ አልተገኘም");
-            }
-
-            const currentBalance = userDoc.data().balance || 0.0;
-
-            if (currentBalance < totalCost) {
-                throw new Error("በቂ ሂሳብ የሎትም");
-            }
-
-            // Deduct cost on Firestore server
-            const newBalance = currentBalance - totalCost;
-            transaction.update(userRef, { balance: newBalance });
-        });
-
-        // 4. Update local JavaScript balance state & UI
-        userPlayBalance -= totalCost;
-        
-        const balanceElement = document.getElementById("balanceDisplay");
-        if (balanceElement) {
-            balanceElement.innerText = userPlayBalance.toFixed(2) + " ETB";
-        }
-
-        // 5. Trigger your existing game start function
-        if (typeof startGameDraw === "function") {
-            startGameDraw();
-        } else if (typeof startDrawingPhase === "function") {
-            startDrawingPhase();
-        }
-
-    } catch (error) {
-        alert("⚠️ የጨዋታ ክፍያ አልተሳካም: " + error.message);
-    } finally {
-        if (actionBtn) actionBtn.disabled = false;
-    }
-}
-async function syncBalanceToFirestore(amountChange) {
-    if (!window.currentUserId || window.currentUserId === "00000") return;
-    
-    try {
-        const userRef = db.collection("users").doc(window.currentUserId);
-        // Use Firebase's built-in increment feature to prevent math errors
-        await userRef.update({
-            balance: firebase.firestore.FieldValue.increment(amountChange)
-        });
-        console.log(`Successfully synced ${amountChange} ETB to Firestore.`);
-    } catch (error) {
-        console.error("Error syncing balance to Firestore:", error);
-    }
-}
+    window.Telegram?.WebApp?.expand();
 
 function triggerDeposit() {
     if (window.Telegram && window.Telegram.WebApp) {
@@ -1519,39 +1145,6 @@ function getAmharicBingoCallText(number) {
 
     return `${letter} ${number}`;
 }
-// Automatically load user transactions and balance the second the WebApp opens
-window.addEventListener('DOMContentLoaded', async () => {
-    const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-    const userId = tgUser ? tgUser.id : 'test_user';
-
-    try {
-       const response = await fetch(`https://onex-bingo-backend.onrender.com/api/user-data?userId=${userId}`, {
-            headers: {
-                'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
-            }
-        });
-        if (response.ok) {
-            const data = await response.json();
-            
-            // 1. Render the transaction history list
-            if (typeof renderTransactionHistory === 'function') {
-                renderTransactionHistory(data.transactions);
-            }
-            
-            // 2. Update balance display if you have a balance element
-            const balanceEl = document.getElementById('user-balance');
-            if (balanceEl) {
-                balanceEl.innerText = `${data.balance} ETB`;
-            }
-        }
-    } catch (error) {
-        console.error("Failed to load initial user data:", error);
-        const container = document.getElementById('transaction-history-list');
-        if (container) {
-            container.innerHTML = `<div class="text-center text-red-400 text-sm py-4">Failed to load history</div>`;
-        }
-    }
-});
 async function fetchAndRenderLeaderboard() {
     // 1. Calculate and set current week's Sunday date
     const today = new Date();
@@ -1604,7 +1197,7 @@ function renderLeaderboardUI(players) {
         <!-- Rank 2 (Silver) -->
         <div class="flex-1 bg-gray-800/80 border border-slate-600 rounded-2xl p-3 flex flex-col items-center justify-between h-36 relative">
             <div class="w-8 h-8 rounded-full bg-slate-300 text-slate-900 font-bold flex items-center justify-center -mt-7 border-2 border-slate-400 text-sm">2</div>
-            <div class="text-xs font-semibold text-white truncate max-w-[80px]">${p2.name}</div>
+            <div class="text-xs font-semibold text-white truncate max-w-[80px]">${esc(p2.name)}</div>
             <div class="text-[11px] font-bold text-amber-500">${p2.cartels} CARTELS</div>
         </div>
 
@@ -1613,14 +1206,14 @@ function renderLeaderboardUI(players) {
             <div class="w-9 h-9 rounded-full bg-yellow-400 text-yellow-950 font-black flex items-center justify-center -mt-8 border-2 border-yellow-300 text-base">
                 <i class="fas fa-crown text-yellow-950"></i>
             </div>
-            <div class="text-xs font-bold text-yellow-400 truncate max-w-[80px]">${p1.name}</div>
+            <div class="text-xs font-bold text-yellow-400 truncate max-w-[80px]">${esc(p1.name)}</div>
             <div class="text-xs font-extrabold text-amber-400">${p1.cartels} CARTELS</div>
         </div>
 
         <!-- Rank 3 (Bronze) -->
         <div class="flex-1 bg-gray-800/80 border border-amber-700/60 rounded-2xl p-3 flex flex-col items-center justify-between h-32 relative">
             <div class="w-8 h-8 rounded-full bg-amber-600 text-white font-bold flex items-center justify-center -mt-7 border-2 border-amber-500 text-sm">3</div>
-            <div class="text-xs font-semibold text-white truncate max-w-[80px]">${p3.name}</div>
+            <div class="text-xs font-semibold text-white truncate max-w-[80px]">${esc(p3.name)}</div>
             <div class="text-[11px] font-bold text-amber-500">${p3.cartels} CARTELS</div>
         </div>
     `;
@@ -1634,7 +1227,7 @@ function renderLeaderboardUI(players) {
                     <div class="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-xs flex items-center justify-center">
                         ${rankNum}
                     </div>
-                    <div class="text-sm font-semibold text-white truncate max-w-[140px]">${player.name}</div>
+                    <div class="text-sm font-semibold text-white truncate max-w-[140px]">${esc(player.name)}</div>
                 </div>
                 <div class="text-xs font-bold text-emerald-400">${player.cartels} CARTELS</div>
             </div>
@@ -1644,17 +1237,6 @@ function renderLeaderboardUI(players) {
 
 // Call this when the app loads or when the Rank tab is clicked
 document.addEventListener('DOMContentLoaded', fetchAndRenderLeaderboard);
-async function updateWeeklyCartels(cartelCount) {
-    if (!window.currentUserId || window.currentUserId === "00000") return;
-    try {
-        const userRef = db.collection("users").doc(window.currentUserId);
-        await userRef.set({
-            weekly_cartels: firebase.firestore.FieldValue.increment(cartelCount)
-        }, { merge: true }); // merge: true prevents overwriting other user data
-    } catch (error) {
-        console.error("Error updating weekly cartels:", error);
-    }
-}
 // Function to generate and display the referral link
 function displayUserReferralLink() {
     // Get the user ID safely from your existing variables or Telegram object
@@ -1687,17 +1269,6 @@ function copyReferralLink() {
             console.error("Failed to copy link: ", err);
         });
     }
-}
-// Start game synchronization loop
-function initGameLoop() {
-    syncGameState(); // Run once immediately on load
-    setInterval(syncGameState, 1000); // Poll every 1 second
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initGameLoop);
-} else {
-    initGameLoop();
 }
 </script>
 </body>
