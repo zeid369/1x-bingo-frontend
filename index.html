@@ -59,6 +59,10 @@
   <div class="text-xs text-gray-400 font-mono" id="header-user-phone">Loading...</div>
 </div>
     </div>
+    <div class="flex items-center space-x-2">
+    <button id="sound-btn" onclick="toggleSound()" aria-label="Sound on/off" class="w-9 h-9 rounded-full bg-xbet-dark border border-xbet-border flex items-center justify-center text-teal-300 active:scale-95 transition">
+      <i id="sound-icon" class="fa-solid fa-volume-high"></i>
+    </button>
     <div class="bg-xbet-dark px-3 py-1.5 rounded-lg border border-xbet-border flex flex-col items-end text-xs">
       <div class="flex items-center space-x-2">
         <span class="text-xbet-green font-bold text-[10px] tracking-wider">PLAY WALLET</span>
@@ -68,6 +72,7 @@
         <span class="text-yellow-400 font-bold text-[10px] tracking-wider">MAIN WALLET</span>
         <span class="font-mono text-gray-300">0.00</span>
       </div>
+    </div>
     </div>
   </header>
 
@@ -918,7 +923,7 @@ let html = `
       void ticketCurrentBall.offsetWidth;
       ticketCurrentBall.classList.add('animate-ball');
       const letter = num <= 15 ? 'B' : num <= 30 ? 'I' : num <= 45 ? 'N' : num <= 60 ? 'G' : 'O';
-      if (speak) speakBingoCallAmharic(getAmharicBingoCallText(num));
+      if (speak) playCall(num);
       ticketStatusText.innerHTML = `የወጣው ቁጥር: <strong class="text-white ml-1 text-lg">${letter} - ${num}</strong>`;
     }
 
@@ -942,7 +947,7 @@ let html = `
       const cartels = winners.map(w => `#${w.cartel}`).join(', ');
       ticketStatusText.innerHTML = `ቢንጎ! አሸናፊ ካርቴል: <strong class="text-white ml-1">${esc(cartels)}</strong>`;
       if (selectedTickets.length === 0) return;      // spectators only see the status line
-      speakBingoCallAmharic('ቢንጎ!');
+      playCall('bingo');
       document.getElementById('winner-total-prize').innerText = `${Number(s.pool).toFixed(2)} ETB`;
       document.getElementById('winner-share-status').innerText = winners.length > 1 ? 'በጋራ አሸንፈዋል!' : '';
       document.getElementById('winners-count-label').innerText = `አሸናፊዎች (${winners.length})`;
@@ -1124,27 +1129,77 @@ function triggerWithdraw() {
         window.Telegram.WebApp.close();
     }
 }
-// --- Amharic Speech Caller Engine ---
-function speakBingoCallAmharic(text) {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Stop previous audio call
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.85;     // Natural speed
-        utterance.lang = 'am-ET';  // Amharic language code
-        window.speechSynthesis.speak(utterance);
-    }
+// --- Ball calls: your recorded voice (one file, calls.mp3, cut into slots) ---
+const CALL_FILE = 'calls.mp3';
+const CALL_MAP = {"1":[0.0,1.47],"2":[1.57,1.48],"3":[3.15,1.49],"4":[4.74,1.49],"5":[6.33,1.51],"6":[7.94,1.56],"7":[9.6,1.6],"8":[11.3,1.42],"9":[12.82,1.35],"10":[14.27,1.4],"11":[15.77,1.51],"12":[17.38,1.43],"13":[18.91,1.57],"14":[20.58,1.65],"15":[22.33,1.63],"16":[24.06,1.76],"17":[25.92,1.81],"18":[27.83,1.8],"19":[29.73,1.61],"20":[31.44,1.32],"21":[32.86,1.6],"22":[34.56,1.54],"23":[36.2,1.61],"24":[37.91,1.63],"25":[39.64,1.54],"26":[41.28,1.71],"27":[43.09,1.64],"28":[44.83,1.61],"29":[46.54,1.52],"30":[48.16,1.47],"31":[49.73,1.5],"32":[51.33,1.93],"33":[53.36,1.87],"34":[55.33,1.85],"35":[57.28,1.73],"36":[59.11,1.73],"37":[60.94,1.85],"38":[62.89,1.88],"39":[64.87,1.67],"40":[66.64,1.4],"41":[68.14,1.65],"42":[69.891,1.85],"43":[71.841,1.7],"44":[73.641,1.64],"45":[75.381,1.66],"46":[77.141,1.95],"47":[79.191,1.7],"48":[80.991,2.15],"49":[83.241,1.58],"50":[84.921,1.38],"51":[86.401,1.55],"52":[88.051,1.84],"53":[89.991,1.54],"54":[91.631,1.87],"55":[93.601,1.66],"56":[95.361,1.58],"57":[97.041,1.74],"58":[98.881,1.79],"59":[100.771,1.65],"60":[102.521,1.42],"61":[104.041,1.52],"62":[105.661,1.8],"63":[107.561,1.42],"64":[109.081,1.69],"65":[110.871,1.43],"66":[112.401,1.65],"67":[114.151,1.74],"68":[115.991,1.61],"69":[117.701,1.48],"70":[119.281,1.25],"71":[120.631,1.86],"72":[122.591,1.66],"73":[124.351,1.51],"74":[125.961,1.64],"75":[127.701,1.5],"bingo":[129.301,1.09]};   // number -> [start, length] in seconds
+let audioCtx = null, callBuffer = null, callsLoading = false, currentCall = null;
+let soundOn = true;
+try { soundOn = localStorage.getItem('bingo_sound') !== 'off'; } catch (e) {}
+
+function applySoundIcon() {
+  const icon = document.getElementById('sound-icon');
+  const btn = document.getElementById('sound-btn');
+  if (icon) icon.className = soundOn ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
+  if (btn) {
+    btn.classList.toggle('text-teal-300', soundOn);
+    btn.classList.toggle('text-gray-500', !soundOn);
+  }
 }
 
-function getAmharicBingoCallText(number) {
-    let letter = '';
-    if (number <= 15) letter = 'ቢ';
-    else if (number <= 30) letter = 'አይ';
-    else if (number <= 45) letter = 'ኤን';
-    else if (number <= 60) letter = 'ጂ';
-    else letter = 'ኦ';
-
-    return `${letter} ${number}`;
+function stopCall() {
+  if (currentCall) { try { currentCall.stop(); } catch (e) {} currentCall = null; }
 }
+
+function toggleSound() {
+  soundOn = !soundOn;
+  try { localStorage.setItem('bingo_sound', soundOn ? 'on' : 'off'); } catch (e) {}
+  if (soundOn) unlockAudio(); else stopCall();
+  applySoundIcon();
+}
+
+async function loadCalls() {
+  if (callBuffer || callsLoading) return;
+  callsLoading = true;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const res = await fetch(CALL_FILE);
+    const data = await res.arrayBuffer();
+    callBuffer = await new Promise((ok, fail) => audioCtx.decodeAudioData(data, ok, fail));
+  } catch (e) {
+    console.warn('Voice file could not load', e);
+  } finally {
+    callsLoading = false;
+  }
+}
+
+// Phones only allow sound after a tap; the player taps cartels anyway, so we unlock on the first touch.
+function unlockAudio() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!callBuffer) loadCalls();
+  } catch (e) {}
+}
+['pointerdown', 'touchstart', 'click'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
+document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCalls(); });
+
+// key = 1..75, or 'bingo'
+function playCall(key) {
+  if (!soundOn || !callBuffer || !audioCtx) return;
+  const slot = CALL_MAP[key];
+  if (!slot) return;
+  try {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    stopCall();                                   // a newer ball always cuts the older call
+    const src = audioCtx.createBufferSource();
+    src.buffer = callBuffer;
+    src.connect(audioCtx.destination);
+    src.start(0, slot[0], slot[1]);
+    currentCall = src;
+    src.onended = () => { if (currentCall === src) currentCall = null; };
+  } catch (e) { console.warn('Could not play call', e); }
+}
+
 async function fetchAndRenderLeaderboard() {
     // 1. Calculate and set current week's Sunday date
     const today = new Date();
