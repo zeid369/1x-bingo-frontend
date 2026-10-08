@@ -614,7 +614,6 @@ const rulesBtn = document.getElementById('game-rules-btn');
     // Navigation Logic
     function switchPage(page) {
       currentPage = page;
-      if (page === 'wallet' || page === 'profile') refreshUserDataSoon();
       
       // Reset views
       pageHome.classList.add('hidden');
@@ -749,7 +748,6 @@ const rulesBtn = document.getElementById('game-rules-btn');
           method: 'POST',
           body: JSON.stringify({ cartel: id })
         });
-        if (res.balance != null) serverBalance = Number(res.balance);
         if (res.state) applyRound(res.state);
         if (res.status !== 'success') {
           const msg = pickErrorText(res.code);
@@ -882,13 +880,7 @@ let html = `
     }
 
     // ---------- balance and profile (always read from the server) ----------
-    let lastUserRefresh = 0;
-    function refreshUserDataSoon() {          // history/stats: at most once a minute, only when those pages are opened
-      if (Date.now() - lastUserRefresh > 60000) refreshUserData();
-    }
-
     function applyUserData(d) {
-      lastUserRefresh = Date.now();
       serverBalance = Number(d.balance) || 0;
       renderTransactionHistory(d.transactions || []);
       window.currentUserPhone = d.phone_number || 'Not Provided';
@@ -955,7 +947,6 @@ let html = `
       const cartels = winners.map(w => `#${w.cartel}`).join(', ');
       ticketStatusText.innerHTML = `ቢንጎ! አሸናፊ ካርቴል: <strong class="text-white ml-1">${esc(cartels)}</strong>`;
       if (selectedTickets.length === 0) return;      // spectators only see the status line
-      if (winners.some(w => w.mine)) refreshUserData();   // a win: update history and stats
       playCall('bingo');
       document.getElementById('winner-total-prize').innerText = `${Number(s.pool).toFixed(2)} ETB`;
       document.getElementById('winner-share-status').innerText = winners.length > 1 ? 'በጋራ አሸንፈዋል!' : '';
@@ -1002,7 +993,7 @@ let html = `
         winnerModal.classList.add('hidden');
       }
       // money may have moved (charged, won, refunded): read the real balance again
-      // (the balance now arrives with every round reply, so there is no extra lookup here)
+      if (newRound || phaseChanged) refreshUserData();
 
       // newly drawn balls
       const n = s.drawn.length;
@@ -1038,7 +1029,6 @@ let html = `
       pollBusy = true;
       try {
         const res = await api('/api/round');
-        if (res.balance != null) serverBalance = Number(res.balance);
         if (res.state) applyRound(res.state);
       } catch (err) {
         console.error('round poll failed', err);
@@ -1079,7 +1069,7 @@ let html = `
       pollRound();
     });
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) { pollRound(); }
+      if (!document.hidden) { pollRound(); refreshUserData(); }
     });
 
 // 1. Paste the main function (transaction history renderer) here
