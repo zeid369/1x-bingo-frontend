@@ -533,6 +533,7 @@ const rulesBtn = document.getElementById('game-rules-btn');
     const TICKET_PRICE = 10;
     const API_BASE = 'https://onex-bingo-backend.onrender.com';
 
+    let serverBonusLocked = false;  // main wallet above the limit: the play wallet is not spent on cartels
     let serverBonus = 0;            // play-wallet part of the balance (not withdrawable)
     let serverBalance = 0;          // the real balance, from the server
     let userPlayBalance = 0;        // what is shown: balance minus cartels picked for the coming round
@@ -752,7 +753,7 @@ const rulesBtn = document.getElementById('game-rules-btn');
           method: 'POST',
           body: JSON.stringify({ cartel: id })
         });
-        if (res.balance != null) { serverBalance = Number(res.balance); serverBonus = Number(res.bonus) || 0; }
+        if (res.balance != null) { serverBalance = Number(res.balance); serverBonus = Number(res.bonus) || 0; serverBonusLocked = !!res.bonus_locked; }
         if (res.state) applyRound(res.state);
         if (res.status !== 'success') {
           const msg = pickErrorText(res.code);
@@ -770,7 +771,7 @@ const rulesBtn = document.getElementById('game-rules-btn');
       const reserved = (round && round.phase === 'selection') ? selectedTickets.length * TICKET_PRICE : 0;
       userPlayBalance = serverBalance - reserved;                       // everything you can still play with
       const bonus = Math.min(serverBonus, serverBalance);
-      const fromBonus = Math.min(bonus, reserved);                      // cartels are paid from the play wallet first
+      const fromBonus = serverBonusLocked ? 0 : Math.min(bonus, reserved);   // cartels are paid from the play wallet first (unless frozen)
       const playShown = bonus - fromBonus;
       const mainShown = (serverBalance - bonus) - (reserved - fromBonus);
       if (!balanceRefreshing) {
@@ -900,6 +901,7 @@ let html = `
       lastUserRefresh = Date.now();
       serverBalance = Number(d.balance) || 0;
       serverBonus = Number(d.bonus) || 0;
+      serverBonusLocked = !!d.bonus_locked;
       renderTransactionHistory(d.transactions || []);
       window.currentUserPhone = d.phone_number || 'Not Provided';
       ['header-user-phone', 'profile-user-phone'].forEach(id => {
@@ -1048,7 +1050,7 @@ let html = `
       pollBusy = true;
       try {
         const res = await api('/api/round');
-        if (res.balance != null) { serverBalance = Number(res.balance); serverBonus = Number(res.bonus) || 0; }
+        if (res.balance != null) { serverBalance = Number(res.balance); serverBonus = Number(res.bonus) || 0; serverBonusLocked = !!res.bonus_locked; }
         if (res.state) applyRound(res.state);
       } catch (err) {
         console.error('round poll failed', err);
