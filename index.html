@@ -70,7 +70,7 @@
       </div>
       <div class="flex items-center space-x-2 mt-0.5">
         <span class="text-yellow-400 font-bold text-[10px] tracking-wider">MAIN WALLET</span>
-        <span class="font-mono text-gray-300">0.00</span>
+        <span id="main-wallet" class="font-mono text-gray-300">0.00</span>
       </div>
     </div>
     </div>
@@ -204,7 +204,7 @@
         <div class="z-10 flex flex-col items-center w-full">
           <div class="text-sm font-bold text-gray-300 mb-1 flex items-center space-x-2">
             <span>ዋና ሂሳብ</span>
-            <span class="text-yellow-400 font-mono text-base">0.00</span>
+            <span id="wallet-page-main" class="text-yellow-400 font-mono text-base">0.00</span>
           </div>
           <div class="text-sm font-bold text-gray-300 mb-8 flex items-center space-x-2">
             <span>መጫወቻ ሂሳብ:</span>
@@ -533,6 +533,7 @@ const rulesBtn = document.getElementById('game-rules-btn');
     const TICKET_PRICE = 10;
     const API_BASE = 'https://onex-bingo-backend.onrender.com';
 
+    let serverBonus = 0;            // play-wallet part of the balance (not withdrawable)
     let serverBalance = 0;          // the real balance, from the server
     let userPlayBalance = 0;        // what is shown: balance minus cartels picked for the coming round
     let balanceRefreshing = false;
@@ -590,6 +591,8 @@ const rulesBtn = document.getElementById('game-rules-btn');
 
     // Wallet Elements
     const walletPagePlay = document.getElementById('wallet-page-play');
+    const mainWalletDisplay = document.getElementById('main-wallet');
+    const walletPageMain = document.getElementById('wallet-page-main');
 
     // Winner Elements
     const winnerModal = document.getElementById('winner-modal');
@@ -749,7 +752,7 @@ const rulesBtn = document.getElementById('game-rules-btn');
           method: 'POST',
           body: JSON.stringify({ cartel: id })
         });
-        if (res.balance != null) serverBalance = Number(res.balance);
+        if (res.balance != null) { serverBalance = Number(res.balance); serverBonus = Number(res.bonus) || 0; }
         if (res.state) applyRound(res.state);
         if (res.status !== 'success') {
           const msg = pickErrorText(res.code);
@@ -765,10 +768,16 @@ const rulesBtn = document.getElementById('game-rules-btn');
 
     function updateUI() {
       const reserved = (round && round.phase === 'selection') ? selectedTickets.length * TICKET_PRICE : 0;
-      userPlayBalance = serverBalance - reserved;
+      userPlayBalance = serverBalance - reserved;                       // everything you can still play with
+      const bonus = Math.min(serverBonus, serverBalance);
+      const fromBonus = Math.min(bonus, reserved);                      // cartels are paid from the play wallet first
+      const playShown = bonus - fromBonus;
+      const mainShown = (serverBalance - bonus) - (reserved - fromBonus);
       if (!balanceRefreshing) {
-        playWalletDisplay.innerText = userPlayBalance.toFixed(2);
-        walletPagePlay.innerText = userPlayBalance.toFixed(2) + ' ETB';
+        playWalletDisplay.innerText = playShown.toFixed(2);
+        walletPagePlay.innerText = playShown.toFixed(2) + ' ETB';
+        mainWalletDisplay.innerText = mainShown.toFixed(2);
+        walletPageMain.innerText = mainShown.toFixed(2);
       }
       selectedCountDisplay.innerText = selectedTickets.length;
 
@@ -890,6 +899,7 @@ let html = `
     function applyUserData(d) {
       lastUserRefresh = Date.now();
       serverBalance = Number(d.balance) || 0;
+      serverBonus = Number(d.bonus) || 0;
       renderTransactionHistory(d.transactions || []);
       window.currentUserPhone = d.phone_number || 'Not Provided';
       ['header-user-phone', 'profile-user-phone'].forEach(id => {
@@ -1038,7 +1048,7 @@ let html = `
       pollBusy = true;
       try {
         const res = await api('/api/round');
-        if (res.balance != null) serverBalance = Number(res.balance);
+        if (res.balance != null) { serverBalance = Number(res.balance); serverBonus = Number(res.bonus) || 0; }
         if (res.state) applyRound(res.state);
       } catch (err) {
         console.error('round poll failed', err);
