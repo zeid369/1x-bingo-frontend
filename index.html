@@ -967,7 +967,6 @@ let html = `
       }
       const cartels = winners.map(w => `#${w.cartel}`).join(', ');
       ticketStatusText.innerHTML = `ቢንጎ! አሸናፊ ካርቴል: <strong class="text-white ml-1">${esc(cartels)}</strong>`;
-      if (selectedTickets.length === 0) return;      // spectators only see the status line
       if (winners.some(w => w.mine)) refreshUserData();   // a win: update history and stats
       playCall('bingo');
       document.getElementById('winner-total-prize').innerText = `${Number(s.pool).toFixed(2)} ETB`;
