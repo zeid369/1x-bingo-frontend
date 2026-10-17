@@ -395,6 +395,10 @@
       <i class="fa-solid fa-ticket text-lg"></i>
       <span class="text-[10px] font-medium">Ticket</span>
       <span id="nav-ticket-badge" class="absolute -top-1 right-0 bg-red-500 text-white text-[8px] font-bold px-1.5 rounded-full hidden">0</span>
+      <span id="nav-drawing-indicator" class="absolute -top-3 left-1/2 -translate-x-1/2 hidden flex-col items-center">
+        <i class="fa-solid fa-chevron-down text-teal-400 text-[8px] animate-bounce"></i>
+        <span class="text-teal-400 text-[7px] font-black tracking-widest uppercase leading-none">DRAW</span>
+      </span>
     </button>
     <button onclick="switchPage('wallet')" id="nav-wallet" class="flex flex-col items-center space-y-1 text-gray-400 hover:text-teal-400 transition-colors w-12">
       <i class="fa-solid fa-wallet text-lg"></i>
@@ -1027,6 +1031,18 @@ let html = `
       }
 
       gameStatusLabel.innerText = statusText(s);
+
+      // Show pulsing DRAW indicator on ticket tab during drawing phase
+      const drawingIndicator = document.getElementById('nav-drawing-indicator');
+      if (drawingIndicator) {
+        if (s.phase === 'drawing') {
+          drawingIndicator.classList.remove('hidden');
+          drawingIndicator.classList.add('flex');
+        } else {
+          drawingIndicator.classList.add('hidden');
+          drawingIndicator.classList.remove('flex');
+        }
+      }
 
       if (s.phase === 'drawing' && prevPhase !== 'drawing' && selectedTickets.length > 0 && currentPage === 'home') {
         switchPage('ticket');
