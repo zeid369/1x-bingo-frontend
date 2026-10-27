@@ -1,421 +1,302 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-[#0e1621]">
+<html lang="am">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>1x Bingo</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            'xbet-dark': '#0e1621',
-            'xbet-card': '#17212b',
-            'xbet-border': '#242f3d',
-            'xbet-blue': '#1e2c3a',
-            'xbet-teal': '#00b894',
-            'xbet-green': '#00e676',
-            'xbet-accent': '#2b5278'
-          }
-        }
-      }
-    }
-  </script>
-  <!-- Font Awesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: #0e1621; }
-    ::-webkit-scrollbar-thumb { background: #242f3d; border-radius: 4px; }
-    body { touch-action: manipulation; user-select: none; }
-    @keyframes ballPop {
-      0% { transform: scale(0.3) rotate(-180deg); opacity: 0; }
-      70% { transform: scale(1.15) rotate(10deg); opacity: 1; }
-      100% { transform: scale(1) rotate(0deg); opacity: 1; }
-    }
-    .animate-ball { animation: ballPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-    @keyframes modalPop {
-      0% { transform: scale(0.8); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .animate-modal { animation: modalPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-    
-    /* Nav Active State Glow */
-    .nav-active { color: #00b894 !important; text-shadow: 0 0 10px rgba(0,184,148,0.5); }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a111a">
+<title>1x Bingo</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root{--bg:#0a111a;--card:#142030;--card2:#1b2b40;--line:#243649;--txt:#e9f1f7;--mut:#8aa0b4;--teal:#19d3b0;--green:#2ee59d;--gold:#ffc83d;--red:#ff5d6c;--cb:#3b82f6;--ci:#6366f1;--cn:#a855f7;--cg:#10b981;--co:#f97316;--sb:env(safe-area-inset-bottom,0px);--navh:64px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(900px 420px at 50% -160px,#14405a 0%,transparent 70%),var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans Ethiopic","Nyala",Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+.hidden{display:none!important}
+.mut{color:var(--mut);font-size:11px;letter-spacing:.04em}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+
+/* header */
+.hdr{display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(15,24,36,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);z-index:30}
+.avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;font-size:17px;flex:none}
+.who{flex:1;min-width:0}.who b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.who span{font:11px ui-monospace,monospace;color:var(--mut)}
+.sbtn{width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--teal);display:flex;align-items:center;justify-content:center;flex:none}
+.sbtn.muted{color:#5d6f80}
+.pills{display:flex;flex-direction:column;gap:3px}
+.pill{display:flex;justify-content:space-between;gap:10px;align-items:baseline;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px 9px;min-width:132px}
+.pill i{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.08em}.pill.m i{color:var(--gold)}.pill.p i{color:var(--teal)}
+.pill b{font:800 13px ui-monospace,monospace}
+
+/* pages */
+#pages{flex:1;min-height:0;position:relative}
+.page{position:absolute;inset:0;overflow-y:auto;padding:10px 12px calc(var(--navh) + var(--sb) + 16px);-webkit-overflow-scrolling:touch}
+.page.home{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+.sec-t{font-weight:800;font-size:15px;margin:14px 2px 8px}
+.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:14px}
+
+/* HOME: status + grid */
+.status{background:linear-gradient(160deg,#17314a,#122033 70%);border:1px solid var(--line);border-radius:18px;padding:10px 12px 8px;flex:none}
+.st-row{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.st-label{font-weight:800;font-size:12px;color:var(--teal);margin-top:2px}
+.cd{font:900 30px ui-monospace,monospace;letter-spacing:.02em;text-align:center}
+.pz{font:900 20px ui-monospace,monospace;color:var(--gold);text-align:right}.pz small{font-size:10px;color:var(--mut)}
+.st-prize{text-align:right}
+.bar{height:5px;border-radius:5px;background:#0c1622;margin-top:8px;overflow:hidden}
+.bar-fill{height:100%;width:100%;border-radius:5px;background:linear-gradient(90deg,var(--teal),var(--green));transition:width .25s linear}
+.soon-line{font-size:10px;color:var(--mut);text-align:center;margin-top:5px}
+.pickhead{display:flex;justify-content:space-between;align-items:center;margin:10px 2px 6px;flex:none}
+.pickhead .t{font-weight:800;font-size:15px}.pickhead .t small{color:var(--mut);font-weight:600}
+.cnt{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-weight:800;font-size:13px}.cnt b{color:var(--green)}
+.cgrid{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:6px;align-content:start;padding:4px 2px calc(var(--navh) + var(--sb) + 86px);contain:content;-webkit-overflow-scrolling:touch}
+.home.tray-open .cgrid{padding-bottom:calc(var(--navh) + var(--sb) + 250px)}
+.cell{height:42px;border-radius:12px;border:1px solid var(--line);background:linear-gradient(180deg,var(--card2),var(--card));font:700 14px ui-monospace,monospace;display:flex;align-items:center;justify-content:center;transition:transform .07s,background .12s}
+.cell:active{transform:scale(.9)}
+.cell.mine{background:linear-gradient(180deg,#46f5b0,#13c98a);color:#04281c;border-color:#9bffd8;box-shadow:0 0 14px rgba(46,229,157,.5);font-weight:900}
+.cell.taken{background:#0d1621;color:#334455;border-color:#142030;pointer-events:none}
+.cell.pend{opacity:.7;animation:pend .45s infinite alternate}
+@keyframes pend{to{transform:scale(.94)}}
+
+/* tray (chosen cartels) */
+.tray{position:fixed;left:8px;right:8px;bottom:calc(var(--navh) + var(--sb) + 6px);background:rgba(18,30,46,.97);backdrop-filter:blur(12px);border:1px solid #1d8b78;border-radius:18px;box-shadow:0 12px 34px #000b;z-index:20}
+.tray-bar{display:flex;align-items:center;gap:8px;padding:9px 10px}
+.chips{flex:1;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;background:#0f2b2c;border:1px solid #1d8b78;color:#7ff3d2;border-radius:999px;padding:6px 10px;font-weight:800;font-size:13px;display:flex;gap:6px;align-items:center}
+.chip i{font-size:10px;opacity:.7}
+.tray-sum{text-align:right;line-height:1.15;flex:none}.tray-sum b{display:block;font:900 15px ui-monospace,monospace;color:var(--green)}.tray-sum small{color:var(--mut);font-size:10px}
+.tray-btn{width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex:none;transition:transform .2s}
+.tray.open .tray-btn{transform:rotate(180deg)}
+.tray-cards{display:none;gap:8px;overflow-x:auto;padding:0 10px 12px}
+.tray.open .tray-cards{display:flex}
+.mini{flex:none;width:128px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:12px;padding:6px}
+.mini h6{margin:0 0 4px;text-align:center;font-size:12px;color:var(--teal)}
+.mini .g{display:grid;grid-template-columns:repeat(5,1fr);gap:2px}
+.mini .g span{height:20px;border-radius:4px;background:#0e1823;font:700 9px ui-monospace,monospace;display:flex;align-items:center;justify-content:center}
+.mini .g span.on{background:var(--green);color:#04281c}.mini .g span.f{color:var(--gold)}
+
+/* TICKET / DRAW */
+.tk-top{display:flex;gap:14px;align-items:center;background:linear-gradient(160deg,#17314a,#122033 70%);border:1px solid var(--line);border-radius:20px;padding:14px}
+.ball{width:96px;height:96px;flex:none;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 32% 26%,#fff 0,var(--bc,#cfd8e3) 38%,#00000055 100%);box-shadow:0 8px 24px #0009,inset 0 -6px 14px #0006;color:#fff;text-shadow:0 2px 6px #0008}
+.ball .bl{font:900 14px system-ui;opacity:.9}.ball .bn{font:900 40px/1 system-ui}
+.c-b{--bc:var(--cb)}.c-i{--bc:var(--ci)}.c-n{--bc:var(--cn)}.c-g{--bc:var(--cg)}.c-o{--bc:var(--co)}
+.animate-ball{animation:pop .4s cubic-bezier(.175,.885,.32,1.275)}
+@keyframes pop{0%{transform:scale(.3) rotate(-160deg);opacity:0}70%{transform:scale(1.12) rotate(8deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+.tk-info{flex:1;min-width:0}.tk-status{font-size:13px;color:var(--mut)}.tk-status b{color:#fff;font-size:17px;margin-left:4px}
+.recent{display:flex;gap:6px;margin:8px 0;min-height:28px}
+.rb{width:28px;height:28px;border-radius:50%;background:var(--bc);font:800 12px system-ui;display:flex;align-items:center;justify-content:center;opacity:.85}
+.tk-meta{display:flex;gap:12px;font-size:10px;color:var(--mut);letter-spacing:.06em}.tk-meta b{color:var(--txt);font-size:12px;margin-left:3px}
+.mb{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:8px 8px 8px 4px;display:flex;flex-direction:column;gap:3px}
+.mb-row{display:grid;grid-template-columns:18px repeat(15,1fr);gap:2px;align-items:center}
+.mb-l{font:900 11px system-ui;text-align:center;color:var(--c)}
+.mb-c{aspect-ratio:1;border-radius:4px;background:#0d1722;color:#4a6075;font:700 8px ui-monospace,monospace;display:flex;align-items:center;justify-content:center}
+.mb-c.on{background:var(--c);color:#fff;font-weight:900}
+.rb-row-b{--c:var(--cb)}.rb-row-i{--c:var(--ci)}.rb-row-n{--c:var(--cn)}.rb-row-g{--c:var(--cg)}.rb-row-o{--c:var(--co)}
+.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tcard{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;padding:8px}
+.tc-h{display:flex;justify-content:space-between;font-weight:800;font-size:12px;color:var(--teal);margin-bottom:5px}
+.tc-l,.tc-g{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+.tc-l{font:900 11px system-ui;text-align:center;margin-bottom:3px}
+.tc-l span:nth-child(1){color:var(--cb)}.tc-l span:nth-child(2){color:#818cf8}.tc-l span:nth-child(3){color:var(--cn)}.tc-l span:nth-child(4){color:var(--cg)}.tc-l span:nth-child(5){color:var(--co)}
+.tn{height:32px;border-radius:8px;background:#0e1823;border:1px solid #1b2a3b;font:700 13px ui-monospace,monospace;display:flex;align-items:center;justify-content:center}
+.tn.on{background:linear-gradient(180deg,#46f5b0,#13c98a);color:#04281c;border-color:#9bffd8;font-weight:900}
+.tn.free{background:linear-gradient(180deg,#ffd75e,#f5a623);color:#2b1c00;font-size:10px;font-weight:900;border-color:#ffe49a}
+
+/* WALLET */
+.wcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.wc{border-radius:18px;padding:14px;border:1px solid var(--line);position:relative;overflow:hidden}
+.wc.m{background:linear-gradient(150deg,#3a2f12,#1b2230 70%)}.wc.p{background:linear-gradient(150deg,#0f3a3a,#1b2230 70%)}
+.wc small{display:block;color:var(--mut);font-size:11px;margin-bottom:6px}
+.wc b{font:900 22px ui-monospace,monospace}.wc.m b{color:var(--gold)}.wc.p b{color:var(--teal)}
+.wc em{display:block;font-style:normal;font-size:10px;color:var(--mut);margin-top:6px}
+.wbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
+.btn{border-radius:14px;padding:13px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .08s}
+.btn:active{transform:scale(.97)}
+.btn.dep{background:linear-gradient(135deg,#19d3b0,#2ee59d);color:#04281c;box-shadow:0 6px 18px rgba(25,211,176,.35)}
+.btn.wd{background:linear-gradient(135deg,#ff6b81,#e0364f);color:#fff;box-shadow:0 6px 18px rgba(224,54,79,.3)}
+.hrow{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px}
+.hrow .l{display:flex;gap:10px;align-items:center}
+.hic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px}
+.hic.in{background:rgba(25,211,176,.16);color:var(--teal)}.hic.out{background:rgba(255,93,108,.16);color:var(--red)}
+.hrow .t{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#cfdbe6}.hrow .d{font:10px ui-monospace,monospace;color:var(--mut)}
+.hrow .a{font:900 14px ui-monospace,monospace}.hrow .a.in{color:var(--green)}.hrow .a.out{color:var(--red)}
+
+/* RANK */
+.soon{display:flex;gap:10px;align-items:center;background:linear-gradient(135deg,rgba(255,200,61,.16),rgba(255,200,61,.04));border:1px dashed rgba(255,200,61,.55);border-radius:14px;padding:10px 12px;margin:2px 0 14px;color:#ffe08a;font-weight:800;font-size:13px}
+.soon small{display:block;font-weight:600;color:var(--mut);font-size:11px}
+.rk-t{text-align:center;font-weight:900;font-size:22px;color:var(--gold)}.rk-s{text-align:center;font:10px ui-monospace,monospace;color:var(--mut);letter-spacing:.14em;margin:3px 0 22px}
+.podium{display:flex;gap:8px;align-items:flex-end;justify-content:center;margin-bottom:16px}
+.pd{flex:1;border-radius:18px;padding:22px 6px 10px;text-align:center;position:relative;background:var(--card);border:1px solid var(--line)}
+.pd .rn{position:absolute;top:-15px;left:50%;transform:translateX(-50%);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900}
+.pd .nm{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px}.pd .ct{font-weight:900;font-size:11px;color:var(--gold)}
+.pd.p1{height:150px;border-color:rgba(255,200,61,.6);box-shadow:0 8px 26px rgba(255,200,61,.12)}.pd.p1 .rn{background:var(--gold);color:#3a2a00}.pd.p1 .nm{color:var(--gold)}
+.pd.p2{height:126px}.pd.p2 .rn{background:#cbd5e1;color:#1e293b}.pd.p3{height:112px;border-color:rgba(205,127,50,.5)}.pd.p3 .rn{background:#cd7f32;color:#fff}
+.rrow{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px}
+.rrow .l{display:flex;gap:10px;align-items:center;min-width:0}.rrow .n{width:26px;height:26px;border-radius:50%;background:rgba(25,211,176,.14);color:var(--teal);font-weight:900;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none}
+.rrow .nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rrow .c{font-weight:900;font-size:11px;color:var(--green);flex:none}
+
+/* PROFILE */
+.pcard{background:linear-gradient(160deg,#17314a,#122033 70%);border:1px solid var(--line);border-radius:20px;padding:18px;display:flex;flex-direction:column;align-items:center;margin-bottom:12px}
+.big-av{width:78px;height:78px;border-radius:50%;background:linear-gradient(135deg,#19d3b0,#2ee59d);color:#04281c;font:900 36px system-ui;display:flex;align-items:center;justify-content:center;box-shadow:0 0 24px rgba(25,211,176,.35);margin-bottom:8px}
+.idc{margin-top:8px;font:11px ui-monospace,monospace;color:var(--teal);border:1px solid rgba(25,211,176,.35);border-radius:999px;padding:4px 12px;background:#0c1622}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:12px}
+.box .h{font-size:12px;font-weight:800;color:var(--teal);margin-bottom:8px}
+.lrow{display:flex;gap:8px}.lnk{flex:1;min-width:0;background:#0c1622;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:11px ui-monospace,monospace;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:all;-webkit-user-select:all}
+.copy{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:0 14px;font-weight:800;font-size:12px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;text-align:center}.stat small{display:block;color:var(--mut);font-size:11px;margin-bottom:4px}
+.stat b{font:900 20px ui-monospace,monospace}
+.menu{width:100%;display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:8px;font-weight:700;font-size:14px;text-align:left}
+.menu span{display:flex;gap:12px;align-items:center}.menu .tag{font-size:10px;background:rgba(255,200,61,.14);color:var(--gold);border-radius:999px;padding:2px 8px;font-weight:800}
+
+/* winner modal, toast, nav */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(4,8,14,.82);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:18px}
+.mcard{width:100%;max-width:340px;text-align:center;background:linear-gradient(170deg,#173a52,#111c2a 65%);border:1.5px solid var(--teal);border-radius:24px;padding:20px 16px;box-shadow:0 0 50px rgba(25,211,176,.35);animation:mpop .35s cubic-bezier(.175,.885,.32,1.275)}
+@keyframes mpop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+.mcard .k{color:var(--gold);font-weight:800;font-size:12px}.mcard .w{color:var(--mut);font-size:12px;margin:4px 0}
+.bingo{font:900 46px/1.1 system-ui;letter-spacing:.04em;background:linear-gradient(180deg,#fff,#ffd75e 60%,#f5a623);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 14px rgba(255,200,61,.45))}
+.pzbox{margin:12px 0;border:1px solid rgba(255,200,61,.45);background:rgba(255,200,61,.07);border-radius:16px;padding:10px}.pzbox small{color:var(--mut);font-size:11px}.pzbox b{display:block;font:900 26px ui-monospace,monospace}
+.share{color:var(--green);font-weight:800;font-size:12px;min-height:14px}
+.wlist{max-height:30vh;overflow-y:auto;margin-top:8px}
+.wrow{display:flex;justify-content:space-between;align-items:center;background:#0e1823;border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:6px;text-align:left}
+.wrow b{font-size:13px;color:#7ff3d2}.wrow small{display:block;font:10px ui-monospace,monospace;color:var(--mut)}.wrow .a{font:900 13px ui-monospace,monospace;color:var(--gold)}
+.go{margin-top:12px;width:100%;border-radius:14px;padding:13px;font-weight:900;background:linear-gradient(135deg,#19d3b0,#2ee59d);color:#04281c}
+.toast{position:fixed;left:50%;bottom:calc(var(--navh) + var(--sb) + 80px);transform:translate(-50%,20px);background:#222f42;border:1px solid var(--line);color:#fff;padding:10px 16px;border-radius:12px;font-weight:700;font-size:13px;opacity:0;pointer-events:none;transition:.2s;z-index:60;max-width:88%;text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.nav{position:fixed;left:0;right:0;bottom:0;height:calc(var(--navh) + var(--sb));padding-bottom:var(--sb);display:flex;background:#0d1520;border-top:1px solid var(--line);z-index:40}
+.nb{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#6f8498;font-size:11px;font-weight:700}
+.nb i{font-size:19px}
+.nb.nav-active{color:var(--teal)}.nb.nav-active::before{content:"";position:absolute;top:0;width:34px;height:3px;border-radius:0 0 4px 4px;background:var(--teal);box-shadow:0 0 12px var(--teal)}
+.badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--red);color:#fff;font-size:10px;font-weight:900;border-radius:999px;min-width:17px;height:17px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.drawtag{position:absolute;top:-10px;font-size:9px;font-weight:900;letter-spacing:.1em;color:var(--red);animation:blink 1s infinite;display:flex;align-items:center}
+@keyframes blink{50%{opacity:.35}}
+</style>
 </head>
-<body class="h-full text-white font-sans antialiased flex flex-col overflow-x-hidden select-none">
+<body>
+<header class="hdr">
+  <div class="avatar"><i class="fa-solid fa-user-ninja"></i></div>
+  <div class="who"><b id="header-user-name">Loading...</b><span id="header-user-phone">Loading...</span></div>
+  <button id="sound-btn" class="sbtn" onclick="toggleSound()" aria-label="Sound"><i id="sound-icon" class="fa-solid fa-volume-high"></i></button>
+  <div class="pills">
+    <div class="pill m"><i>MAIN</i><b id="main-wallet">0.00</b></div>
+    <div class="pill p"><i>PLAY</i><b id="play-wallet">0.00</b></div>
+  </div>
+</header>
 
-  <!-- GLOBAL HEADER (Always Visible) -->
-  <header class="p-3 bg-xbet-card border-b border-xbet-border flex justify-between items-center sticky top-0 z-30 shadow-md">
-    <div class="flex items-center space-x-2">
-      <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center font-bold text-white shadow relative">
-        <i class="fa-solid fa-user-ninja"></i>
+<main id="pages">
+  <!-- HOME -->
+  <section id="page-home" class="page home">
+    <div class="status">
+      <div class="st-row">
+        <div><div class="mut">1X BINGO</div><div id="game-status-label" class="st-label">ጨዋታው ሊጀምር ነው</div></div>
+        <div id="countdown" class="cd">00:30</div>
+        <div class="st-prize"><div class="mut">ደራሽ</div><div class="pz"><span id="jackpot-display">0.00</span> <small>ETB</small></div></div>
       </div>
-     <div>
-  <div class="font-bold text-sm tracking-wide text-white" id="header-user-name">Loading...</div>
-  <div class="text-xs text-gray-400 font-mono" id="header-user-phone">Loading...</div>
-</div>
+      <div class="bar"><div id="timer-bar" class="bar-fill"></div></div>
+      <div class="soon-line">🎁 የደራሽ ቦነስ በቅርብ ቀን ይጀምራል</div>
     </div>
-    <div class="flex items-center space-x-2">
-    <button id="sound-btn" onclick="toggleSound()" aria-label="Sound on/off" class="w-9 h-9 rounded-full bg-xbet-dark border border-xbet-border flex items-center justify-center text-teal-300 active:scale-95 transition">
-      <i id="sound-icon" class="fa-solid fa-volume-high"></i>
-    </button>
-    <div class="bg-xbet-dark px-3 py-1.5 rounded-lg border border-xbet-border flex flex-col items-end text-xs">
-      <div class="flex items-center space-x-2">
-        <span class="text-xbet-green font-bold text-[10px] tracking-wider">PLAY WALLET</span>
-        <span id="play-wallet" class="font-mono font-bold text-white text-sm">0.00</span>
-      </div>
-      <div class="flex items-center space-x-2 mt-0.5">
-        <span class="text-yellow-400 font-bold text-[10px] tracking-wider">MAIN WALLET</span>
-        <span id="main-wallet" class="font-mono text-gray-300">0.00</span>
+    <div class="pickhead"><div class="t">ካርቴል ይምረጡ <small>(10 ብር)</small></div><div class="cnt"><b id="selected-count">0</b> / 4</div></div>
+    <div id="cartel-grid" class="cgrid"></div>
+  </section>
+
+  <!-- TICKET / DRAW -->
+  <section id="page-ticket" class="page hidden">
+    <div class="tk-top">
+      <div id="ticket-current-ball" class="ball"><span id="ticket-ball-letter" class="bl">-</span><span id="ticket-ball-text" class="bn">--</span></div>
+      <div class="tk-info">
+        <div id="ticket-status-text" class="tk-status">ገና አልጀመረም...</div>
+        <div id="recent-balls" class="recent"></div>
+        <div class="tk-meta"><span>BALLS<b id="ticket-draw-count">0/75</b></span><span>PRIZE<b id="ticket-prize-pool">0.00 ETB</b></span></div>
       </div>
     </div>
+    <div id="master-board-grid" class="mb"></div>
+    <div class="sec-t">የእኔ ካርቴሎች</div>
+    <div id="ticket-empty-msg" class="empty">እስካሁን ካርቴል አልገዙም</div>
+    <div id="ticket-matrices-container" class="tgrid hidden"></div>
+  </section>
+
+  <!-- WALLET -->
+  <section id="page-wallet" class="page hidden">
+    <div class="sec-t" style="text-align:center;font-size:20px;margin-top:6px">የእኔ ሂሳብ (Wallet)</div>
+    <div class="wcards">
+      <div class="wc m"><small>ዋና ሂሳብ</small><b id="wallet-page-main">0.00</b><em>ወጪ ማድረግ ይቻላል</em></div>
+      <div class="wc p"><small>መጫወቻ ሂሳብ</small><b id="wallet-page-play">0.00 ETB</b><em>ለመጫወት ብቻ</em></div>
     </div>
-  </header>
-
-  <!-- ==================== PAGE: HOME ==================== -->
-  <div id="page-home" class="flex-1 flex flex-col max-w-md mx-auto w-full pb-20">
-    <section class="p-3">
-      <div class="bg-gradient-to-b from-[#17212b] to-[#0e1621] border border-xbet-border rounded-xl p-3 relative overflow-hidden shadow-lg">
-        <div class="flex justify-between items-center mb-3">
-          <div class="text-center w-full">
-            <h1 class="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-teal-400 via-cyan-300 to-blue-400 uppercase">
-              1X BINGO
-            </h1>
-          </div>
-        </div>
-        <div class="grid grid-cols-3 gap-2">
-          <div class="bg-xbet-blue/80 border border-xbet-border rounded-lg p-2 text-center flex flex-col justify-between shadow">
-            <span id="game-status-label" class="text-[10px] text-gray-300 font-medium">ጨዋታው ሊጀምር ነው</span>
-            <div id="countdown" class="text-lg font-black text-white font-mono tracking-wider my-1 drop-shadow-md">00:30</div>
-            <div class="w-full bg-gray-700 h-1 rounded-full overflow-hidden">
-              <div id="timer-bar" class="bg-teal-400 h-full w-full transition-all duration-1000"></div>
-            </div>
-          </div>
-          <div class="bg-xbet-blue/80 border border-cyan-500/30 rounded-lg p-2 text-center flex flex-col justify-between shadow">
-            <span class="text-[10px] text-cyan-400 font-bold tracking-wide">ደራሽ</span>
-            <div id="jackpot-display" class="text-lg font-black text-cyan-300 font-mono tracking-tight my-0.5">0.00</div>
-            <span class="text-[10px] text-gray-400 font-semibold">ETB</span>
-          </div>
-          <div class="bg-xbet-blue/80 border border-xbet-border rounded-lg p-2 text-center flex flex-col justify-center items-center shadow">
-            <span class="text-[9px] text-gray-400 leading-tight mb-1">የደራሽ ቦነስ በቅርብ ቀን ይጀመራል</span>
-            <i class="fa-solid fa-hourglass-half text-yellow-500 text-sm animate-pulse"></i>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="px-4 py-2 flex justify-between items-center">
-      <div class="font-bold text-sm tracking-wide flex items-center space-x-1">
-        <span class="text-white">ካርቴል ይምረጡ</span>
-        <span class="text-xs text-gray-400 font-normal">(10 ብር)</span>
-      </div>
-      <div class="text-sm font-bold bg-xbet-card px-2.5 py-1 rounded-lg border border-xbet-border font-mono">
-        <span id="selected-count" class="text-gray-400">0</span> <span class="text-gray-500">/ 4</span>
-      </div>
-    </section>
-
-    <section class="px-3 flex-1 relative h-full">
-      <div class="bg-xbet-card/60 border border-xbet-border rounded-xl p-2.5 h-[50vh] overflow-y-auto shadow-inner relative">
-        <div id="cartel-grid" class="grid grid-cols-10 gap-1.5 pb-44">
-          <!-- Dynamically generated -->
-        </div>
-      </div>
-      
-      <div class="absolute bottom-4 right-6 z-20">
-        <div class="bg-gradient-to-r from-blue-900/90 to-slate-900/90 backdrop-blur-md border border-cyan-500/50 rounded-full px-3 py-1.5 shadow-2xl flex items-center space-x-2">
-          <span class="flex h-2.5 w-2.5 relative">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-          </span>
-          <div class="flex flex-col text-left">
-            <span class="text-[8px] text-red-400 font-black tracking-widest uppercase">LIVE</span>
-            <span id="floating-jackpot" class="text-xs font-bold text-cyan-300 font-mono">0.00 ETB</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <!-- ==================== PAGE: TICKET ==================== -->
-  <div id="page-ticket" class="hidden flex-1 flex flex-col max-w-md mx-auto w-full pb-32">
-    <section class="p-4 flex justify-between items-end">
-      <h2 class="text-xl font-black text-teal-400 tracking-wide drop-shadow">የእኔ ካርቴሎች</h2>
-      <div class="flex flex-col items-end text-xs font-mono font-bold">
-        <div class="text-gray-400 mb-1">BALLS: <span id="ticket-draw-count" class="text-white">0/75</span></div>
-        <div class="border border-xbet-border bg-xbet-blue/60 rounded px-2 py-1 flex items-center space-x-1">
-          <span class="text-gray-500">PRIZE:</span>
-          <span id="ticket-prize-pool" class="text-cyan-400">0.00 ETB</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="px-4 mb-4">
-      <div class="bg-xbet-card border border-xbet-border rounded-xl p-3 flex items-center space-x-4 shadow-lg relative overflow-hidden">
-        <div class="relative w-16 h-16 flex-shrink-0 flex items-center justify-center">
-          <div class="absolute inset-0 bg-teal-500/20 rounded-full blur-md"></div>
-          <div class="absolute inset-2 border border-teal-400/50 rounded-full animate-ping opacity-50"></div>
-          <div id="ticket-current-ball" class="relative w-12 h-12 bg-white rounded-full flex flex-col items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.4)]">
-            <span id="ticket-ball-text" class="text-slate-900 font-black text-xl font-mono leading-none">--</span>
-          </div>
-        </div>
-        <div id="ticket-status-text" class="text-gray-400 font-medium text-sm">
-          ገና አልጀመረም...
-        </div>
-      </div>
-    </section>
-
-    <section class="px-4 mb-4">
-      <button onclick="toggleMasterBoard()" class="w-full bg-xbet-blue border border-teal-500/50 hover:bg-slate-700 text-teal-300 font-bold py-2.5 rounded-lg flex items-center justify-center space-x-2 transition-colors">
-        <i class="fa-solid fa-eye text-orange-400"></i>
-        <span>ሙሉ ቦርድ እይ (Master Board)</span>
-        <i id="master-board-chevron" class="fa-solid fa-chevron-down text-[10px] ml-1 transition-transform"></i>
-      </button>
-      <div id="collapsible-master-board" class="hidden mt-3 bg-xbet-dark/90 border border-xbet-border rounded-lg p-2 shadow-inner">
-        <div id="master-board-grid" class="grid grid-cols-5 gap-0.5">
-          <!-- Generated via JS -->
-        </div>
-      </div>
-    </section>
-
-    <section class="px-4 flex-1">
-      <div id="ticket-empty-msg" class="text-center text-gray-500 text-sm py-10">
-        እስካሁን ካርቴል አልገዙም
-      </div>
-      <div id="ticket-matrices-container" class="grid grid-cols-1 gap-4 hidden pb-10">
-        <!-- 5x5 matrices populated here -->
-      </div>
-    </section>
-  </div>
-
-  <!-- ==================== PAGE: WALLET ==================== -->
-  <div id="page-wallet" class="hidden flex-1 flex flex-col max-w-md mx-auto w-full pb-32">
-    <section class="p-5 text-center mt-2">
-      <h2 class="text-2xl font-black text-white tracking-wide">የእኔ ሂሳብ (Wallet)</h2>
-    </section>
-
-    <section class="px-4 mb-6">
-      <div class="bg-xbet-card border border-xbet-border rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col items-center">
-        <div class="absolute -top-10 -right-10 w-32 h-32 bg-teal-500/10 rounded-full blur-3xl"></div>
-        <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-red-500/10 rounded-full blur-3xl"></div>
-        <div class="z-10 flex flex-col items-center w-full">
-          <div class="text-sm font-bold text-gray-300 mb-1 flex items-center space-x-2">
-            <span>ዋና ሂሳብ</span>
-            <span id="wallet-page-main" class="text-yellow-400 font-mono text-base">0.00</span>
-          </div>
-          <div class="text-sm font-bold text-gray-300 mb-8 flex items-center space-x-2">
-            <span>መጫወቻ ሂሳብ:</span>
-            <span id="wallet-page-play" class="text-cyan-400 font-mono text-base">0.00 ETB</span>
-          </div>
-          <div class="flex space-x-4 w-full">
-    <!-- 🟢 Added onclick="triggerDeposit()" here -->
-<button onclick="triggerDeposit()" class="flex-1 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 text-black font-black py-3 rounded-xl shadow-[0_4px_15px_rgba(20,184,166,0.4)]">        <i class="fa-solid fa-plus text-lg"></i>
-        <span>Deposit</span>
-    </button>
-    
-    <!-- 🟢 Added onclick="triggerWithdraw()" here -->
-    <button onclick="triggerWithdraw()" class="flex-1 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 text-white font-black py-3 rounded-xl shadow-[0_4px_15px_rgba(225,29,72,0.3)]">
-        <i class="fa-solid fa-money-bill-transfer text-sm"></i>
-        <span>Withdraw</span>
-    </button>
-</div>
-        </div>
-      </div>
-      <!-- Transaction History Section -->
-<div class="mt-6">
-    <h3 class="text-gray-400 font-medium text-sm mb-3">የግብይት ታሪክ (History)</h3>
-    <div id="transaction-history-list" class="space-y-2">
-        <!-- Transactions will be generated here by JavaScript -->
-        <div class="text-center text-gray-600 text-sm py-4">Loading...</div>
+    <div class="wbtns">
+      <button class="btn dep" onclick="triggerDeposit()"><i class="fa-solid fa-plus"></i><span>Deposit</span></button>
+      <button class="btn wd" onclick="triggerWithdraw()"><i class="fa-solid fa-money-bill-transfer"></i><span>Withdraw</span></button>
     </div>
-</div>
-    </section>
+    <div class="sec-t">የግብይት ታሪክ (History)</div>
+    <div id="transaction-history-list"><div class="empty">Loading...</div></div>
+  </section>
 
-    
-  </div>
+  <!-- RANK -->
+  <section id="page-rank" class="page hidden">
+    <div class="soon"><span style="font-size:24px">🏆</span><div>ሽልማት በቅርቡ ይመጣል<small>Prizes for the weekly top players are coming soon</small></div></div>
+    <div class="rk-t"><i class="fa-solid fa-trophy"></i> አሸናፊዎች (TOP 10)</div>
+    <div class="rk-s" id="rank-date-subtitle">Weekly Players • Structuring...</div>
+    <div class="podium" id="rank-podium-container"></div>
+    <div id="rank-list-container"></div>
+  </section>
 
-  <!-- ==================== PAGE: RANK ==================== -->
-  <div id="page-rank" class="hidden flex-1 flex flex-col max-w-md mx-auto w-full pb-32">
-    <section class="p-5 text-center mt-2 pb-2">
-      <h2 class="text-2xl font-black text-yellow-500 tracking-wide drop-shadow mb-1 flex items-center justify-center space-x-2">
-        <i class="fa-solid fa-trophy"></i>
-        <span>አሸናፊዎች (TOP 10)</span>
-      </h2>
-      <div class="text-[10px] text-gray-400 font-mono uppercase tracking-widest" id="rank-date-subtitle">
-        Weekly Players • Structuring...
-      </div>
-    </section>
-
-    <section class="px-4 mb-6 mt-4">
-      <div class="flex justify-center items-end gap-2" id="rank-podium-container">
-        <!-- Generated via JS -->
-      </div>
-    </section>
-
-    <section class="px-4 flex-1">
-      <div id="rank-list-container" class="flex flex-col space-y-2 pb-10">
-        <!-- Generated via JS -->
-      </div>
-    </section>
-  </div>
-
-  <!-- ==================== PAGE: PROFILE ==================== -->
-  <div id="page-profile" class="hidden flex-1 flex flex-col max-w-md mx-auto w-full pb-32">
-    <section class="p-5 text-center mt-2 pb-3">
-      <h2 class="text-xl font-black text-white tracking-wide flex items-center justify-center space-x-2">
-        <i class="fa-solid fa-user text-gray-400"></i>
-        <span>የእኔ ፕሮፋይል</span>
-      </h2>
-    </section>
-
-    <!-- Avatar Card -->
-    <section class="px-4 mb-4">
-      <div class="bg-xbet-card border border-xbet-border rounded-2xl p-5 flex flex-col items-center shadow-lg relative overflow-hidden">
-        <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center text-4xl font-black text-slate-900 shadow-[0_0_20px_rgba(0,184,148,0.3)] mb-3 relative">
-  <span id="profile-avatar-letter">?</span>
-</div>
-        <div class="text-xl font-bold text-white tracking-wide mb-0.5" id="profile-user-name">Loading...</div>
-<div class="text-sm text-gray-400 font-mono mb-3" id="profile-user-phone">Loading...</div>
-        <!-- Inside the profile section -->
-<div class="text-xs text-teal-400 font-mono bg-xbet-dark px-4 py-1.5 rounded-full border border-teal-500/30">
-  ID: #<span id="profile-user-id">Loading...</span>
-</div>
-      </div>
-    </section>
-
-    <!-- Referral Link Share -->
-    <section class="px-4 mb-4">
-      <div class="bg-xbet-card border border-xbet-border rounded-xl p-4 shadow-md">
-        <div class="text-xs font-bold text-teal-400 flex items-center space-x-2 mb-2">
-          <i class="fa-solid fa-robot text-lg"></i>
-          <span>የእርስዎ መጋበዣ ሊንክ (Share)</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div id="referral-link-display" class="flex-1 bg-xbet-dark border border-xbet-border rounded-lg px-3 py-2 text-xs text-gray-400 font-mono truncate select-all">
-    https://t.me/my_1x_bingo_bot?start=ref_pending...
-</div>
-          <button onclick="copyReferralLink()" id="btn-copy-link" class="bg-xbet-blue hover:bg-slate-700 text-white text-xs font-bold px-4 py-2 rounded-lg border border-xbet-border transition-colors w-16 text-center">
-            Copy
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Player Stats Grid -->
-    <section class="px-4 mb-4">
-      <div class="grid grid-cols-2 gap-3">
-        <div class="bg-xbet-card border border-xbet-border rounded-xl p-4 flex flex-col items-center justify-center shadow-md">
-          <span class="text-xs text-gray-400 mb-1 font-medium">የተጫወቱት (Played)</span>
-          <div id="stat-games-played" class="text-xl font-mono font-black text-blue-400">0</div>
-        </div>
-        <div class="bg-xbet-card border border-xbet-border rounded-xl p-4 flex flex-col items-center justify-center shadow-md">
-          <span class="text-xs text-gray-400 mb-1 font-medium">ያሸነፉት (Won)</span>
-          <div id="stat-games-won" class="text-xl font-mono font-black text-xbet-green">0.00 ETB</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Menu List (Rules, Help, Promo - Excluding History & Password) -->
-    <section class="px-4 flex-1">
-      <div class="flex flex-col space-y-2">
-        <button id="profile-help-btn" class="w-full bg-xbet-card border border-xbet-border hover:bg-xbet-blue rounded-xl p-4 flex justify-between items-center transition-colors shadow-sm">
-          <div class="flex items-center gap-3">
-          <span class="text-blue-400 text-xl">📞</span>
-          <span class="font-medium text-sm">እርዳታ ያስፈልጎታል?</span>
-      </div>
-         <i class="fa-solid fa-chevron-right text-gray-600 text-xs"></i>
-       </button>
-        
-        <button id="game-rules-btn" class="w-full bg-xbet-card border border-xbet-border hover:bg-xbet-blue rounded-xl p-4 flex justify-between items-center transition-colors shadow-sm">
-          <div class="flex items-center gap-3">
-          <span class="text-blue-400 text-xl">📘</span>
-          <span class="font-medium text-sm">የጨዋታው መመሪያ እና ደንብ</span>
-      </div>
-         <i class="fa-solid fa-chevron-right text-gray-600 text-xs"></i>
-      </button>
-        <button class="w-full bg-xbet-card border border-xbet-border hover:bg-xbet-blue rounded-xl p-4 flex justify-between items-center transition-colors shadow-sm">
-          <div class="flex items-center space-x-3">
-            <div class="w-6 flex justify-center"><i class="fa-solid fa-ticket-simple text-pink-400 text-lg"></i></div>
-            <span class="text-sm font-bold text-gray-200">ፕሮሞ ኮድ (Promo Code)</span>
-          </div>
-          <i class="fa-solid fa-chevron-right text-gray-600 text-xs"></i>
-        </button>
-      </div>
-    </section>
-  </div>
-
-
-  <!-- POPUP: SELECTED CARTELS MINI GRID POPUP -->
-  <div id="cartel-popup-panel" class="fixed bottom-16 left-0 right-0 max-w-md mx-auto z-40 bg-slate-950/95 backdrop-blur-md border-t-2 border-xbet-teal p-3 rounded-t-2xl shadow-[0_-8px_25px_rgba(0,0,0,0.8)] hidden transition-all duration-300">
-    <div class="flex justify-between items-center mb-2 px-1">
-      <div class="text-xs font-bold text-white flex items-center space-x-1.5">
-        <span>የመረጧቸው ካርቴሎች:</span>
-        <span id="popup-cartel-count" class="text-xbet-teal font-mono font-black text-sm">0</span>
-      </div>
-      <div id="popup-total-price" class="text-xbet-green font-mono font-black text-sm tracking-wide">0 ETB</div>
+  <!-- PROFILE -->
+  <section id="page-profile" class="page hidden">
+    <div class="sec-t" style="text-align:center;font-size:19px;margin-top:6px"><i class="fa-solid fa-user" style="color:var(--mut)"></i> የእኔ ፕሮፋይል</div>
+    <div class="pcard">
+      <div class="big-av"><span id="profile-avatar-letter">?</span></div>
+      <div style="font-weight:900;font-size:19px" id="profile-user-name">Loading...</div>
+      <div style="font:13px ui-monospace,monospace;color:var(--mut);margin-top:2px" id="profile-user-phone">Loading...</div>
+      <div class="idc">ID: #<span id="profile-user-id">Loading...</span></div>
     </div>
-    <div id="popup-cards-wrapper" class="flex space-x-3 overflow-x-auto pb-1 pt-1 scrollbar-thin"></div>
-  </div>
-
-  <!-- WINNER OVERLAY POPUP MODAL -->
-  <div id="winner-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 hidden">
-    <div class="max-w-xs w-full bg-xbet-card border-2 border-xbet-teal rounded-2xl p-4 shadow-[0_0_50px_rgba(0,184,148,0.4)] animate-modal text-center relative overflow-hidden">
-      <div class="text-xs font-black text-amber-400 uppercase tracking-widest mb-1 flex items-center justify-center space-x-1">
-        <span>✨</span><span>ሽልማት ገቢ እየተደረገ ነው...</span><span>✨</span>
-      </div>
-      <div class="text-sm font-extrabold text-gray-300 tracking-wider mb-2">አሸናፊ (WINNER)</div>
-      <div class="text-5xl font-black text-white tracking-widest drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] my-1">BINGO!</div>
-      <div id="winner-share-status" class="text-lg font-black text-yellow-400 mb-3 drop-shadow">በጋራ አሸንፈዋል!</div>
-      <div class="bg-slate-900 border border-yellow-500/60 rounded-xl p-3 mb-3 shadow-inner">
-        <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">ጠቅላላ የደራሽ ሽልማት</div>
-        <div id="winner-total-prize" class="text-2xl font-black text-white font-mono tracking-tight">0.00 ETB</div>
-      </div>
-      <div class="bg-slate-900/80 border border-xbet-border rounded-xl p-2 max-h-48 overflow-y-auto">
-        <div class="text-xs font-black text-emerald-400 mb-2 flex items-center justify-center space-x-1">
-          <span>✨</span><span id="winners-count-label">አሸናፊዎች (1)</span><span>✨</span>
-        </div>
-        <div id="winners-list-container" class="space-y-1.5"></div>
-      </div>
-      <button onclick="closeWinnerModal()" class="w-full mt-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 text-black font-black py-2 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-transform active:scale-95">
-        ቀጥል (CONTINUE)
-      </button>
+    <div class="box">
+      <div class="h"><i class="fa-solid fa-robot"></i> የእርስዎ መጋበዣ ሊንክ (Share)</div>
+      <div class="lrow"><div id="referral-link-display" class="lnk">https://t.me/my_1x_bingo_bot?start=ref_pending...</div><button id="btn-copy-link" class="copy" onclick="copyReferralLink()">Copy</button></div>
     </div>
+    <div class="stats">
+      <div class="stat"><small>የተጫወቱት (Played)</small><b id="stat-games-played" style="color:#60a5fa">0</b></div>
+      <div class="stat"><small>ያሸነፉት (Won)</small><b id="stat-games-won" style="color:var(--green)">0.00 ETB</b></div>
+    </div>
+    <button id="profile-help-btn" class="menu"><span><span style="font-size:20px">📞</span>እርዳታ ያስፈልጎታል?</span><i class="fa-solid fa-chevron-right" style="color:#4a6075;font-size:12px"></i></button>
+    <button id="game-rules-btn" class="menu"><span><span style="font-size:20px">📘</span>የጨዋታው መመሪያ እና ደንብ</span><i class="fa-solid fa-chevron-right" style="color:#4a6075;font-size:12px"></i></button>
+    <button class="menu"><span><i class="fa-solid fa-ticket-simple" style="color:#f472b6;font-size:18px;width:24px;text-align:center"></i>ፕሮሞ ኮድ (Promo Code)</span><span class="tag">በቅርቡ</span></button>
+  </section>
+</main>
+
+<!-- chosen cartels -->
+<div id="cartel-popup-panel" class="tray hidden">
+  <div class="tray-bar">
+    <div id="popup-chips" class="chips"></div>
+    <div class="tray-sum"><b id="popup-total-price">0 ETB</b><small><span id="popup-cartel-count">0</span> ካርቴል · 🏆 <span id="floating-jackpot">0.00 ETB</span></small></div>
+    <button class="tray-btn" onclick="toggleTray()" aria-label="Preview"><i class="fa-solid fa-chevron-up"></i></button>
   </div>
+  <div id="popup-cards-wrapper" class="tray-cards"></div>
+</div>
 
-  <!-- BOTTOM NAVIGATION BAR -->
-  <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-xbet-card border-t border-xbet-border px-4 py-2 flex justify-between items-center z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.3)]">
-    <button onclick="switchPage('home')" id="nav-home" class="nav-active flex flex-col items-center space-y-1 text-gray-400 hover:text-teal-400 transition-colors w-12">
-      <i class="fa-solid fa-house text-lg"></i>
-      <span class="text-[10px] font-medium">Home</span>
-    </button>
-    <button onclick="switchPage('ticket')" id="nav-ticket" class="flex flex-col items-center space-y-1 text-gray-400 hover:text-teal-400 transition-colors w-12 relative">
-      <i class="fa-solid fa-ticket text-lg"></i>
-      <span class="text-[10px] font-medium">Ticket</span>
-      <span id="nav-ticket-badge" class="absolute -top-1 right-0 bg-red-500 text-white text-[8px] font-bold px-1.5 rounded-full hidden">0</span>
-      <span id="nav-drawing-indicator" class="absolute -top-6 left-1/2 -translate-x-1/2 hidden flex-col items-center gap-0.5">
-        <span class="text-red-500 text-[10px] font-black tracking-widest uppercase leading-none drop-shadow-[0_0_6px_rgba(239,68,68,0.9)]">DRAW</span>
-        <i class="fa-solid fa-arrow-down text-red-500 text-base animate-bounce drop-shadow-[0_0_6px_rgba(239,68,68,0.9)]"></i>
-      </span>
-    </button>
-    <button onclick="switchPage('wallet')" id="nav-wallet" class="flex flex-col items-center space-y-1 text-gray-400 hover:text-teal-400 transition-colors w-12">
-      <i class="fa-solid fa-wallet text-lg"></i>
-      <span class="text-[10px] font-medium">Wallet</span>
-    </button>
-    <button onclick="switchPage('rank')" id="nav-rank" class="flex flex-col items-center space-y-1 text-gray-400 hover:text-teal-400 transition-colors w-12">
-      <i class="fa-solid fa-trophy text-lg"></i>
-      <span class="text-[10px] font-medium">Rank</span>
-    </button>
-    <button onclick="switchPage('profile')" id="nav-profile" class="flex flex-col items-center space-y-1 text-gray-400 hover:text-teal-400 transition-colors w-12">
-      <i class="fa-solid fa-user-gear text-lg"></i>
-      <span class="text-[10px] font-medium">Profile</span>
-    </button>
-  </nav>
+<!-- winner -->
+<div id="winner-modal" class="modal hidden">
+  <div class="mcard">
+    <div class="k">🎰 ሽልማት ገቢ እየተደረገ ነው... 🎰</div>
+    <div class="w">አሸናፊ (WINNER)</div>
+    <div class="bingo">BINGO!</div>
+    <div class="pzbox"><small>ጠቅላላ የደራሽ ሽልማት</small><b id="winner-total-prize">0.00 ETB</b></div>
+    <div id="winner-share-status" class="share"></div>
+    <div class="mut" style="margin-top:6px"><span id="winners-count-label">አሸናፊዎች (1)</span></div>
+    <div id="winners-list-container" class="wlist"></div>
+    <button class="go" onclick="closeWinnerModal()">ቀጥል (CONTINUE)</button>
+  </div>
+</div>
 
-  <!-- JAVASCRIPT GAME LOGIC -->
-  <script>
+<div id="toast" class="toast"></div>
+
+<nav class="nav">
+  <button id="nav-home" class="nb nav-active" onclick="switchPage('home')"><i class="fa-solid fa-house"></i><span>Home</span></button>
+  <button id="nav-ticket" class="nb" onclick="switchPage('ticket')"><i class="fa-solid fa-ticket"></i><span>Ticket</span>
+    <span id="nav-ticket-badge" class="badge hidden">0</span><span id="nav-drawing-indicator" class="drawtag hidden">DRAW</span></button>
+  <button id="nav-wallet" class="nb" onclick="switchPage('wallet')"><i class="fa-solid fa-wallet"></i><span>Wallet</span></button>
+  <button id="nav-rank" class="nb" onclick="switchPage('rank')"><i class="fa-solid fa-trophy"></i><span>Rank</span></button>
+  <button id="nav-profile" class="nb" onclick="switchPage('profile')"><i class="fa-solid fa-user-gear"></i><span>Profile</span></button>
+</nav>
+
+
+<script>
 
   // 1. Define global variables at the top of your script
 window.currentUserName = "Player";
@@ -451,13 +332,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 applyUserData(data);
             }
         } else {
-            const historyElem = document.getElementById('transaction-history-container') || document.getElementById('transaction-history-list');
-            if (historyElem) historyElem.innerHTML = `<div class="text-center text-red-500 text-sm py-4">Failed to load history.</div>`;
+            const historyElem = document.getElementById('transaction-history-list');
+            if (historyElem) historyElem.innerHTML = `<div class="empty">Failed to load history.</div>`;
         }
     } catch (error) {
         console.error("Error fetching initial user data:", error);
-        const historyElem = document.getElementById('transaction-history-container') || document.getElementById('transaction-history-list');
-        if (historyElem) historyElem.innerHTML = `<div class="text-center text-red-500 text-sm py-4">Failed to load history.</div>`;
+        const historyElem = document.getElementById('transaction-history-list');
+        if (historyElem) historyElem.innerHTML = `<div class="empty">Failed to load history.</div>`;
     }
 
     // Update HTML Headers/Profiles
@@ -558,6 +439,10 @@ const rulesBtn = document.getElementById('game-rules-btn');
     let pollBusy = false;
     let pickBusy = false;
     let gridState = [];
+    let cells = [];                 // the 500 cartel buttons, kept so painting needs no lookups
+    let serverMine = [];            // my cartels as the server last told us
+    const pending = new Map();      // taps the server has not answered yet: cartel -> 'add' | 'remove'
+    let trayOpen = false;
 
     // Page Elements
     const pageHome = document.getElementById('page-home');
@@ -584,8 +469,6 @@ const rulesBtn = document.getElementById('game-rules-btn');
 
     // Ticket Elements
     const masterBoardGrid = document.getElementById('master-board-grid');
-    const collapsibleMasterBoard = document.getElementById('collapsible-master-board');
-    const masterBoardChevron = document.getElementById('master-board-chevron');
     const ticketEmptyMsg = document.getElementById('ticket-empty-msg');
     const ticketMatricesContainer = document.getElementById('ticket-matrices-container');
     const ticketDrawCount = document.getElementById('ticket-draw-count');
@@ -642,7 +525,7 @@ const rulesBtn = document.getElementById('game-rules-btn');
       if (page === 'home') {
         pageHome.classList.remove('hidden');
         navHome.classList.add('nav-active');
-        if (selectedTickets.length > 0 && !isDrawingPhase) popupPanel.classList.remove('hidden');
+        renderPopupCartels();
       } else if (page === 'ticket') {
         pageTicket.classList.remove('hidden');
         navTicket.classList.add('nav-active');
@@ -661,75 +544,59 @@ const rulesBtn = document.getElementById('game-rules-btn');
       }
     }
 
-    // Toggle Master Board (Accordion)
-    function toggleMasterBoard() {
-      collapsibleMasterBoard.classList.toggle('hidden');
-      if (collapsibleMasterBoard.classList.contains('hidden')) {
-        masterBoardChevron.classList.remove('rotate-180');
-      } else {
-        masterBoardChevron.classList.add('rotate-180');
-      }
-    }
 
     // ---------- the 500-cartel grid ----------
-    const CLS_FREE  = 'h-9 bg-xbet-blue hover:bg-slate-700 text-white font-bold text-xs rounded border border-xbet-border/80 flex items-center justify-center transition-all duration-150 active:scale-95 shadow-sm';
-    const CLS_MINE  = 'h-9 bg-xbet-green text-black font-black text-xs rounded border border-green-300 flex items-center justify-center';
-    const CLS_TAKEN = 'h-9 bg-slate-800 text-slate-600 font-bold text-xs rounded border border-slate-700 flex items-center justify-center opacity-50 cursor-not-allowed';
-
-    function initGrid() {
+        function initGrid() {
       gridContainer.innerHTML = '';
       gridState = [];
+      cells = [];
       for (let i = 1; i <= 500; i++) {
         const btn = document.createElement('button');
         btn.id = `cartel-${i}`;
-        btn.className = CLS_FREE;
+        btn.className = 'cell free';
         btn.innerText = i;
-        btn.onclick = () => toggleCartel(i);
+        btn.setAttribute('data-n', i);
         gridContainer.appendChild(btn);
+        cells[i] = btn;
       }
     }
+    // one listener for all 500 cells (fast), the tap shows instantly
+    gridContainer.addEventListener('click', e => {
+      const b = e.target && e.target.closest ? e.target.closest('.cell') : null;
+      if (b) toggleCartel(Number(b.getAttribute('data-n')));
+    });
 
     // Only restyle the cells whose state changed since the last poll.
+        // Only restyle the cells whose state changed since the last paint.
     function paintGrid() {
       const mine = new Set(selectedTickets);
       for (let i = 1; i <= 500; i++) {
-        const st = mine.has(i) ? 'mine' : (takenCartels.has(i) ? 'taken' : 'free');
+        const st = (mine.has(i) ? 'mine' : (takenCartels.has(i) ? 'taken' : 'free')) + (pending.has(i) ? ' pend' : '');
         if (gridState[i] === st) continue;
         gridState[i] = st;
-        const btn = document.getElementById(`cartel-${i}`);
-        if (btn) btn.className = st === 'mine' ? CLS_MINE : st === 'taken' ? CLS_TAKEN : CLS_FREE;
+        if (cells[i]) cells[i].className = 'cell ' + st;
       }
     }
 
     // Initialize Master Board Colored Grid
-    function initMasterBoard() {
+        function initMasterBoard() {
       masterBoardGrid.innerHTML = '';
-      const columns = [
-        { letter: 'B', bg: 'bg-blue-600', text: 'text-white' },
-        { letter: 'I', bg: 'bg-indigo-500', text: 'text-white' },
-        { letter: 'N', bg: 'bg-purple-500', text: 'text-white' },
-        { letter: 'G', bg: 'bg-emerald-500', text: 'text-white' },
-        { letter: 'O', bg: 'bg-orange-500', text: 'text-white' }
-      ];
-      
-      columns.forEach((col, idx) => {
-        const colDiv = document.createElement('div');
-        colDiv.className = 'flex flex-col';
-        const header = document.createElement('div');
-        header.className = `${col.bg} ${col.text} text-center font-black text-[11px] py-1 border border-slate-900`;
-        header.innerText = col.letter;
-        colDiv.appendChild(header);
-
+      ['b', 'i', 'n', 'g', 'o'].forEach((k, idx) => {
+        const row = document.createElement('div');
+        row.className = `mb-row rb-row-${k}`;
+        const label = document.createElement('div');
+        label.className = 'mb-l';
+        label.innerText = k.toUpperCase();
+        row.appendChild(label);
         for (let r = 1; r <= 15; r++) {
           const num = idx * 15 + r;
           const cell = document.createElement('div');
           cell.id = `master-num-${num}`;
-          cell.className = `h-5 bg-xbet-card/50 ${col.text} font-mono font-bold text-[10px] flex items-center justify-center border border-slate-800 transition-colors`;
+          cell.className = 'mb-c';
           cell.innerText = num;
-          cell.setAttribute('data-active-bg', col.bg);
-          colDiv.appendChild(cell);
+          row.appendChild(cell);
         }
-        masterBoardGrid.appendChild(colDiv);
+        masterBoardGrid.appendChild(row);
       });
     }
 
@@ -746,29 +613,64 @@ const rulesBtn = document.getElementById('game-rules-btn');
     }
 
     // Tapping a cartel asks the server. The server decides (taken? balance? time left?).
+        // ---------- instant feedback helpers ----------
+    let toastTimer = null;
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      if (!t || !msg) return;
+      t.innerText = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 2300);
+    }
+    function haptic(kind) {
+      try {
+        const h = window.Telegram?.WebApp?.HapticFeedback;
+        if (!h) return;
+        if (kind === 'ok') h.notificationOccurred('success');
+        else if (kind === 'err') h.notificationOccurred('error');
+        else h.impactOccurred('light');
+      } catch (e) {}
+    }
+    function recomputeSelected() {              // what I picked = what the server says + taps still on their way
+      const set = new Set(serverMine);
+      pending.forEach((act, id) => { if (act === 'add') set.add(id); else set.delete(id); });
+      selectedTickets = [...set].sort((a, b) => a - b);
+    }
+    function refreshPickView() { recomputeSelected(); paintGrid(); updateUI(); renderPopupCartels(); }
+
+    // The tap shows at once; the server confirms in the background (and the board corrects itself if it refuses).
     async function toggleCartel(id) {
-      if (!round || round.phase !== 'selection' || pickBusy) return;
+      if (!round || round.phase !== 'selection' || pending.has(id)) return;
       const mine = selectedTickets.includes(id);
-      if (!mine && takenCartels.has(id)) { alert(pickErrorText('taken')); return; }
-      if (!mine && selectedTickets.length >= MAX_SELECTION) { alert(pickErrorText('full')); return; }
-      if (!mine && userPlayBalance < TICKET_PRICE) { alert(pickErrorText('balance')); return; }
-      pickBusy = true;
+      if (!mine) {
+        if (takenCartels.has(id)) { toast(pickErrorText('taken')); haptic('err'); return; }
+        if (selectedTickets.length >= MAX_SELECTION) { toast(pickErrorText('full')); haptic('err'); return; }
+        if (userPlayBalance < TICKET_PRICE) { toast(pickErrorText('balance')); haptic('err'); return; }
+      }
+      pending.set(id, mine ? 'remove' : 'add');
+      refreshPickView();
+      haptic('tap');
       try {
         const res = await api(mine ? '/api/round/unpick' : '/api/round/pick', {
           method: 'POST',
           body: JSON.stringify({ cartel: id })
         });
+        pending.delete(id);
         if (res.balance != null) { serverBalance = Number(res.balance); serverBonus = Number(res.bonus) || 0; serverBonusLocked = !!res.bonus_locked; }
         if (res.state) applyRound(res.state);
+        refreshPickView();
         if (res.status !== 'success') {
           const msg = pickErrorText(res.code);
-          if (msg) alert(msg);
+          if (msg) toast(msg);
+          haptic('err');
         }
       } catch (err) {
         console.error('pick failed', err);
-        alert(pickErrorText('network'));
-      } finally {
-        pickBusy = false;
+        pending.delete(id);
+        refreshPickView();
+        toast(pickErrorText('network'));
+        haptic('err');
       }
     }
 
@@ -783,7 +685,7 @@ const rulesBtn = document.getElementById('game-rules-btn');
         playWalletDisplay.innerText = playShown.toFixed(2);
         walletPagePlay.innerText = playShown.toFixed(2) + ' ETB';
         mainWalletDisplay.innerText = mainShown.toFixed(2);
-        walletPageMain.innerText = mainShown.toFixed(2);
+        walletPageMain.innerText = mainShown.toFixed(2) + ' ETB';
       }
       selectedCountDisplay.innerText = selectedTickets.length;
 
@@ -821,79 +723,59 @@ const rulesBtn = document.getElementById('game-rules-btn');
       return matrix;
     }
 
+        function toggleTray() { trayOpen = !trayOpen; renderPopupCartels(); }
+
+    function miniCard(id, dn) {
+      const m = generateMatrix(id);
+      let h = `<div class="mini"><h6>#${id}</h6><div class="g">`;
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 5; c++) {
+          if (r === 2 && c === 2) h += '<span class="f">★</span>';
+          else { const n = m[c][r]; h += `<span class="${dn.has(n) ? 'on' : ''}">${n}</span>`; }
+        }
+      }
+      return h + '</div></div>';
+    }
+
+    // The tray of chosen cartels: a slim bar by default (the grid keeps the screen), a preview of the cards on demand.
     function renderPopupCartels() {
       if (selectedTickets.length === 0 || isDrawingPhase || currentPage !== 'home') {
         popupPanel.classList.add('hidden');
+        pageHome.classList.remove('tray-open');
         return;
       }
       popupPanel.classList.remove('hidden');
       document.getElementById('popup-cartel-count').innerText = selectedTickets.length;
       document.getElementById('popup-total-price').innerText = `${selectedTickets.length * TICKET_PRICE} ETB`;
-      popupCardsWrapper.innerHTML = '';
-
-      selectedTickets.forEach(ticketId => {
-        const matrix = generateMatrix(ticketId);
-        const card = document.createElement('div');
-        card.className = 'flex-shrink-0 bg-white text-black rounded-lg p-1.5 w-32 shadow-2xl border-2 border-xbet-teal relative group';
-        let html = `
-          <button onclick="toggleCartel(${ticketId})" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md hover:bg-red-700 z-10">&times;</button>
-          <div class="text-center font-black text-xs border-b border-gray-300 pb-0.5 mb-1">#${ticketId}</div>
-          <div class="grid grid-cols-5 gap-0.5 text-center font-mono font-bold text-[9px]">
-        `;
-        for (let row = 0; row < 5; row++) {
-          for (let col = 0; col < 5; col++) {
-            if (row === 2 && col === 2) {
-              html += `<div class="bg-amber-100 text-amber-500 border border-gray-200 h-5 flex items-center justify-center rounded-sm"><i class="fa-solid fa-star text-[8px]"></i></div>`;
-            } else {
-              const num = matrix[col][row];
-              const isMarked = drawnNumbers.includes(num);
-              const bgClass = isMarked ? 'bg-emerald-500 text-white' : 'bg-gray-50 border border-gray-200';
-              html += `<div class="${bgClass} h-5 flex items-center justify-center rounded-sm">${num}</div>`;
-            }
-          }
-        }
-        card.innerHTML = html + `</div>`;
-        popupCardsWrapper.appendChild(card);
-      });
+      document.getElementById('popup-chips').innerHTML = selectedTickets.map(id =>
+        `<button class="chip" onclick="toggleCartel(${id})">#${id}<i class="fa-solid fa-xmark"></i></button>`).join('');
+      if (trayOpen) {
+        popupPanel.classList.add('open');
+        pageHome.classList.add('tray-open');
+        const dn = new Set(drawnNumbers);
+        popupCardsWrapper.innerHTML = selectedTickets.map(id => miniCard(id, dn)).join('');
+      } else {
+        popupPanel.classList.remove('open');
+        pageHome.classList.remove('tray-open');
+        popupCardsWrapper.innerHTML = '';
+      }
     }
 
-    function renderTicketMatrices() {
-      ticketMatricesContainer.innerHTML = '';
-      if (selectedTickets.length === 0) return;
-      if (typeof ticketMatricesContainer !== 'undefined' && ticketMatricesContainer) {
-    ticketMatricesContainer.className = "grid grid-cols-2 gap-1.5 p-1.5";
-}
-      selectedTickets.forEach(ticketId => {
-        const matrix = generateMatrix(ticketId);
-        const card = document.createElement('div');
-        card.className = 'bg-xbet-card border border-xbet-border rounded-lg p-1.5 shadow-lg relative';
-let html = `
-    <div class="flex justify-between items-center mb-1 pb-1 border-b border-xbet-border">
-        <span class="font-bold text-xs text-teal-400 flex items-center space-x-1">
-            <i class="fa-solid fa-ticket text-[10px]"></i><span>ካርቴላ #${ticketId}</span>
-        </span>
-    </div>
-    <div class="grid grid-cols-5 gap-1 text-center font-black text-xs text-yellow-400 mb-1">
-        <div>B</div><div>I</div><div>N</div><div>G</div><div>O</div>
-    </div>
-    <div class="grid grid-cols-5 gap-1 text-center text-xs font-mono font-bold">
-`;
-        for (let row = 0; row < 5; row++) {
-          for (let col = 0; col < 5; col++) {
-            if (row === 2 && col === 2) {
-              html += `<div class="bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black p-2 rounded shadow flex items-center justify-center text-[10px]">FREE</div>`;
-            } else {
-              const num = matrix[col][row];
-              const isMarked = drawnNumbers.includes(num);
-             const style = isMarked ? 'bg-emerald-500 text-black border-2 border-white scale-105 text-sm p-1' : 'bg-xbet-blue text-white border border-gray-600 text-sm p-1';
-              html += `<div class="${style} p-2 rounded transition-all duration-200 flex items-center justify-center">${num}</div>`;
-            }
+        function renderTicketMatrices() {
+      if (selectedTickets.length === 0) { ticketMatricesContainer.innerHTML = ''; return; }
+      const dn = new Set(drawnNumbers);
+      ticketMatricesContainer.innerHTML = selectedTickets.map(id => {
+        const m = generateMatrix(id);
+        let g = '';
+        for (let r = 0; r < 5; r++) {
+          for (let c = 0; c < 5; c++) {
+            if (r === 2 && c === 2) g += '<div class="tn free">FREE</div>';
+            else { const n = m[c][r]; g += `<div class="tn${dn.has(n) ? ' on' : ''}">${n}</div>`; }
           }
         }
-        card.innerHTML = html + `</div>`;
-        ticketMatricesContainer.className = "grid grid-cols-2 gap-1.5 p-1.5";
-        ticketMatricesContainer.appendChild(card);
-      });
+        return `<div class="tcard"><div class="tc-h"><span><i class="fa-solid fa-ticket"></i> ካርቴላ #${id}</span></div>` +
+               `<div class="tc-l"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div><div class="tc-g">${g}</div></div>`;
+      }).join('');
     }
 
     // ---------- balance and profile (always read from the server) ----------
@@ -934,22 +816,29 @@ let html = `
     }
 
     // ---------- the shared round ----------
-    function markMaster(num) {
+        function markMaster(num) {
       const cell = document.getElementById(`master-num-${num}`);
-      if (!cell) return;
-      const activeBg = cell.getAttribute('data-active-bg');
-      cell.className = `h-5 ${activeBg} text-white font-mono font-black text-[11px] flex items-center justify-center border border-slate-900 shadow-inner`;
+      if (cell) cell.classList.add('on');
+    }
+
+        const letterOf = n => n <= 15 ? 'b' : n <= 30 ? 'i' : n <= 45 ? 'n' : n <= 60 ? 'g' : 'o';
+
+    function renderRecent() {                    // the last few balls before the current one
+      const prev = drawnNumbers.slice(0, -1).slice(-5).reverse();
+      document.getElementById('recent-balls').innerHTML = prev.map(n => `<span class="rb c-${letterOf(n)}">${n}</span>`).join('');
     }
 
     function showBall(num, count, speak) {
+      const k = letterOf(num);
       ticketDrawCount.innerText = `${count}/75`;
       ticketBallText.innerText = num;
-      ticketCurrentBall.classList.remove('animate-ball');
+      document.getElementById('ticket-ball-letter').innerText = k.toUpperCase();
+      ticketCurrentBall.className = `ball c-${k}`;
       void ticketCurrentBall.offsetWidth;
       ticketCurrentBall.classList.add('animate-ball');
-      const letter = num <= 15 ? 'B' : num <= 30 ? 'I' : num <= 45 ? 'N' : num <= 60 ? 'G' : 'O';
       if (speak) playCall(num);
-      ticketStatusText.innerHTML = `የወጣው ቁጥር: <strong class="text-white ml-1 text-lg">${letter} - ${num}</strong>`;
+      ticketStatusText.innerHTML = `የወጣው ቁጥር: <b>${k.toUpperCase()} - ${num}</b>`;
+      renderRecent();
     }
 
     function statusText(s) {
@@ -963,30 +852,22 @@ let html = `
       return 'ጨዋታው ተጀምሯል (እጣ እየወጣ ነው)';
     }
 
-    function showResult(s) {
+        function showResult(s) {
       const winners = s.winners || [];
       if (s.no_winner || winners.length === 0) {
         ticketStatusText.innerText = 'ምንም አሸናፊ የለም';
         return;
       }
       const cartels = winners.map(w => `#${w.cartel}`).join(', ');
-      ticketStatusText.innerHTML = `ቢንጎ! አሸናፊ ካርቴል: <strong class="text-white ml-1">${esc(cartels)}</strong>`;
-      if (winners.some(w => w.mine)) refreshUserData();   // a win: update history and stats
+      ticketStatusText.innerHTML = `ቢንጎ! አሸናፊ ካርቴል: <b>${esc(cartels)}</b>`;
+      if (winners.some(w => w.mine)) { refreshUserData(); haptic('ok'); }   // a win: update history and stats
       playCall('bingo');
       document.getElementById('winner-total-prize').innerText = `${Number(s.pool).toFixed(2)} ETB`;
       document.getElementById('winner-share-status').innerText = winners.length > 1 ? 'በጋራ አሸንፈዋል!' : '';
       document.getElementById('winners-count-label').innerText = `አሸናፊዎች (${winners.length})`;
-      winnersListContainer.innerHTML = winners.map(w => `
-          <div class="bg-xbet-card border border-xbet-border rounded-lg p-2 flex justify-between items-center text-left">
-            <div class="flex items-center space-x-2">
-              <div class="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-xs"><i class="fa-solid fa-user"></i></div>
-              <div>
-                <div class="text-xs text-teal-300 font-bold">${esc(w.name)}${w.mine ? ' (እርስዎ)' : ''}</div>
-                <div class="text-[9px] text-gray-400 font-mono">${w.phone ? 'ስልክ: ' + esc(w.phone) + ' | ' : ''}ካርቴል: <span class="text-teal-400 font-bold">#${w.cartel}</span></div>
-              </div>
-            </div>
-            <div class="text-xs font-black text-yellow-400 font-mono tracking-wide">${Number(w.prize).toFixed(2)} ETB</div>
-          </div>`).join('');
+      winnersListContainer.innerHTML = winners.map(w =>
+        `<div class="wrow"><div><b>${esc(w.name)}${w.mine ? ' (እርስዎ)' : ''}</b><small>${w.phone ? 'ስልክ: ' + esc(w.phone) + ' | ' : ''}ካርቴል: #${w.cartel}</small></div>` +
+        `<div class="a">${Number(w.prize).toFixed(2)} ETB</div></div>`).join('');
       winnerModal.classList.remove('hidden');
     }
 
@@ -1001,7 +882,8 @@ let html = `
       const prevPhase = lastPhase;
 
       round = s;
-      selectedTickets = s.my_cartels.slice();
+      serverMine = s.my_cartels.slice();
+      recomputeSelected();
       takenCartels = new Set(s.taken);
       isDrawingPhase = s.phase !== 'selection';
       drawnNumbers = s.drawn;
@@ -1013,6 +895,9 @@ let html = `
         gridState = [];
         initMasterBoard();
         ticketBallText.innerText = '--';
+        document.getElementById('ticket-ball-letter').innerText = '-';
+        ticketCurrentBall.className = 'ball';
+        document.getElementById('recent-balls').innerHTML = '';
         ticketStatusText.innerText = 'ገና አልጀመረም...';
         ticketDrawCount.innerText = '0/75';
         winnerModal.classList.add('hidden');
@@ -1114,37 +999,17 @@ let html = `
 function renderTransactionHistory(transactions) {
     const historyContainer = document.getElementById('transaction-history-list');
     if (!historyContainer) return;
-
     if (!transactions || transactions.length === 0) {
-        historyContainer.innerHTML = `<div class="text-center text-gray-500 text-sm py-4">ምንም የግብይት ታሪክ የለም (No transactions yet).</div>`;
+        historyContainer.innerHTML = `<div class="empty">ምንም የግብይት ታሪክ የለም (No transactions yet).</div>`;
         return;
     }
-
-    // Sort transactions from newest to oldest
     const sortedTx = transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
     historyContainer.innerHTML = sortedTx.map(tx => {
-        const isDeposit = ['deposit', 'win', 'refund', 'bonus', 'deposit_bonus'].includes(tx.type);
-        const colorClass = isDeposit ? 'text-xbet-green' : 'text-red-500';
-        const sign = isDeposit ? '+' : '-';
+        const isIn = ['deposit', 'win', 'refund', 'bonus', 'deposit_bonus'].includes(tx.type);
         const dateStr = new Date(tx.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-        return `
-        <div class="bg-xbet-dark border border-xbet-border rounded-lg p-3 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <div class="w-8 h-8 rounded-full ${isDeposit ? 'bg-teal-500/20 text-teal-400' : 'bg-red-500/20 text-red-400'} flex items-center justify-center">
-                    <i class="fa-solid ${isDeposit ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
-                </div>
-                <div>
-                    <div class="text-xs font-bold text-gray-300 uppercase tracking-wider">${String(tx.type).replace('_', ' ')}</div>
-                    <div class="text-[10px] text-gray-500 font-mono">${dateStr}</div>
-                </div>
-            </div>
-            <div class="font-mono font-black ${colorClass}">
-                ${sign}${tx.amount.toFixed(2)} ETB
-            </div>
-        </div>
-        `;
+        return `<div class="hrow"><div class="l"><div class="hic ${isIn ? 'in' : 'out'}"><i class="fa-solid ${isIn ? 'fa-arrow-down' : 'fa-arrow-up'}"></i></div>` +
+               `<div><div class="t">${String(tx.type).replace('_', ' ')}</div><div class="d">${dateStr}</div></div></div>` +
+               `<div class="a ${isIn ? 'in' : 'out'}">${isIn ? '+' : '-'}${Number(tx.amount).toFixed(2)} ETB</div></div>`;
     }).join('');
 }
   </script>
@@ -1178,10 +1043,7 @@ function applySoundIcon() {
   const icon = document.getElementById('sound-icon');
   const btn = document.getElementById('sound-btn');
   if (icon) icon.className = soundOn ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
-  if (btn) {
-    btn.classList.toggle('text-teal-300', soundOn);
-    btn.classList.toggle('text-gray-500', !soundOn);
-  }
+  if (btn) { if (soundOn) btn.classList.remove('muted'); else btn.classList.add('muted'); }
 }
 
 function stopCall() {
@@ -1202,7 +1064,7 @@ async function loadCalls() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const res = await fetch(CALL_FILE);
     const data = await res.arrayBuffer();
-    callBuffer = await new Promise((ok, fail) => audioCtx.decodeAudioData(data, ok, fail));
+    callBuffer = await new Promise((ok, fail) => { const p = audioCtx.decodeAudioData(data, ok, fail); if (p && p.catch) p.catch(() => {}); });
   } catch (e) {
     console.warn('Voice file could not load', e);
   } finally {
@@ -1272,60 +1134,14 @@ async function fetchAndRenderLeaderboard() {
 function renderLeaderboardUI(players) {
     const podiumContainer = document.getElementById('rank-podium-container');
     const listContainer = document.getElementById('rank-list-container');
-
     if (!podiumContainer || !listContainer) return;
-
-    // Pad with empty entries if fewer than 10 players exist
     const fullList = [...players];
-    while (fullList.length < 10) {
-        fullList.push({ name: '---', cartels: 0 });
-    }
-
-    // 2. Build Podium HTML (2nd place, 1st place, 3rd place order)
-    const p1 = fullList[0];
-    const p2 = fullList[1];
-    const p3 = fullList[2];
-
-    podiumContainer.innerHTML = `
-        <!-- Rank 2 (Silver) -->
-        <div class="flex-1 bg-gray-800/80 border border-slate-600 rounded-2xl p-3 flex flex-col items-center justify-between h-36 relative">
-            <div class="w-8 h-8 rounded-full bg-slate-300 text-slate-900 font-bold flex items-center justify-center -mt-7 border-2 border-slate-400 text-sm">2</div>
-            <div class="text-xs font-semibold text-white truncate max-w-[80px]">${esc(p2.name)}</div>
-            <div class="text-[11px] font-bold text-amber-500">${p2.cartels} CARTELS</div>
-        </div>
-
-        <!-- Rank 1 (Gold) -->
-        <div class="flex-1 bg-gray-800/90 border border-yellow-500/80 rounded-2xl p-3 flex flex-col items-center justify-between h-44 relative shadow-lg shadow-yellow-500/10">
-            <div class="w-9 h-9 rounded-full bg-yellow-400 text-yellow-950 font-black flex items-center justify-center -mt-8 border-2 border-yellow-300 text-base">
-                <i class="fas fa-crown text-yellow-950"></i>
-            </div>
-            <div class="text-xs font-bold text-yellow-400 truncate max-w-[80px]">${esc(p1.name)}</div>
-            <div class="text-xs font-extrabold text-amber-400">${p1.cartels} CARTELS</div>
-        </div>
-
-        <!-- Rank 3 (Bronze) -->
-        <div class="flex-1 bg-gray-800/80 border border-amber-700/60 rounded-2xl p-3 flex flex-col items-center justify-between h-32 relative">
-            <div class="w-8 h-8 rounded-full bg-amber-600 text-white font-bold flex items-center justify-center -mt-7 border-2 border-amber-500 text-sm">3</div>
-            <div class="text-xs font-semibold text-white truncate max-w-[80px]">${esc(p3.name)}</div>
-            <div class="text-[11px] font-bold text-amber-500">${p3.cartels} CARTELS</div>
-        </div>
-    `;
-
-    // 3. Build Ranks 4-10 List HTML
-    listContainer.innerHTML = fullList.slice(3, 10).map((player, index) => {
-        const rankNum = index + 4;
-        return `
-            <div class="flex items-center justify-between p-3 bg-gray-800/60 rounded-xl border border-gray-700/50">
-                <div class="flex items-center space-x-3">
-                    <div class="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-xs flex items-center justify-center">
-                        ${rankNum}
-                    </div>
-                    <div class="text-sm font-semibold text-white truncate max-w-[140px]">${esc(player.name)}</div>
-                </div>
-                <div class="text-xs font-bold text-emerald-400">${player.cartels} CARTELS</div>
-            </div>
-        `;
-    }).join('');
+    while (fullList.length < 10) fullList.push({ name: '---', cartels: 0 });
+    const [p1, p2, p3] = fullList;
+    const pod = (p, cls, badge) => `<div class="pd ${cls}"><div class="rn">${badge}</div><div class="nm">${esc(p.name)}</div><div class="ct">${p.cartels} CARTELS</div></div>`;
+    podiumContainer.innerHTML = pod(p2, 'p2', '2') + pod(p1, 'p1', '👑') + pod(p3, 'p3', '3');
+    listContainer.innerHTML = fullList.slice(3, 10).map((player, index) =>
+        `<div class="rrow"><div class="l"><div class="n">${index + 4}</div><div class="nm">${esc(player.name)}</div></div><div class="c">${player.cartels} CARTELS</div></div>`).join('');
 }
 
 // Call this when the app loads or when the Rank tab is clicked
