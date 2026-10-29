@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0a111a">
 <title>1x Bingo</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src='//libtl.com/sdk.js' data-zone='12140197' data-sdk='show_12140197'></script>
 <style>
 :root{--bg:#0a111a;--card:#142030;--card2:#1b2b40;--line:#243649;--txt:#e9f1f7;--mut:#8aa0b4;--teal:#19d3b0;--green:#2ee59d;--gold:#ffc83d;--red:#ff5d6c;--cb:#3b82f6;--ci:#6366f1;--cn:#a855f7;--cg:#10b981;--co:#f97316;--sb:env(safe-area-inset-bottom,0px);--navh:64px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -168,6 +169,76 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 .badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--red);color:#fff;font-size:10px;font-weight:900;border-radius:999px;min-width:17px;height:17px;display:flex;align-items:center;justify-content:center;padding:0 4px}
 .drawtag{position:absolute;top:-10px;font-size:9px;font-weight:900;letter-spacing:.1em;color:var(--red);animation:blink 1s infinite;display:flex;align-items:center}
 @keyframes blink{50%{opacity:.35}}
+
+/* ── Rewarded Ad Floating Button ── */
+#ad-reward-btn{
+  position:fixed;
+  z-index:55;
+  width:58px;height:58px;
+  border-radius:50%;
+  background:linear-gradient(135deg,#f59e0b,#f97316);
+  box-shadow:0 4px 20px rgba(249,115,22,.55),0 0 0 0 rgba(249,115,22,.4);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;
+  cursor:pointer;
+  border:2.5px solid rgba(255,255,255,.25);
+  touch-action:none;
+  transition:box-shadow .2s,transform .1s;
+  user-select:none;-webkit-user-select:none;
+}
+#ad-reward-btn.dragging{transition:none;box-shadow:0 8px 28px rgba(249,115,22,.7)}
+#ad-reward-btn:active:not(.dragging){transform:scale(.93)}
+#ad-reward-btn .ab-icon{font-size:18px;color:#fff;line-height:1}
+#ad-reward-btn .ab-label{font:800 8px system-ui;color:rgba(255,255,255,.9);letter-spacing:.06em;text-transform:uppercase}
+#ad-reward-btn .ab-amt{font:900 9px ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.25);border-radius:999px;padding:1px 5px;font-size:8px}
+
+/* pulse ring when idle */
+@keyframes adpulse{
+  0%{box-shadow:0 4px 20px rgba(249,115,22,.55),0 0 0 0 rgba(249,115,22,.45)}
+  60%{box-shadow:0 4px 20px rgba(249,115,22,.55),0 0 0 14px rgba(249,115,22,0)}
+  100%{box-shadow:0 4px 20px rgba(249,115,22,.55),0 0 0 0 rgba(249,115,22,0)}
+}
+#ad-reward-btn.idle{animation:adpulse 2.2s infinite}
+
+/* cooldown overlay */
+#ad-reward-btn.cooldown{background:linear-gradient(135deg,#334155,#1e293b);box-shadow:0 4px 16px rgba(0,0,0,.4);animation:none;cursor:not-allowed}
+#ad-reward-btn .ab-cd{display:none;font:900 11px ui-monospace,monospace;color:var(--teal)}
+#ad-reward-btn.cooldown .ab-cd{display:block}
+#ad-reward-btn.cooldown .ab-icon,
+#ad-reward-btn.cooldown .ab-label,
+#ad-reward-btn.cooldown .ab-amt{display:none}
+
+/* ad loading spinner overlay */
+#ad-spinner-overlay{
+  position:fixed;inset:0;z-index:70;
+  background:rgba(4,8,14,.88);backdrop-filter:blur(8px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+}
+#ad-spinner-overlay.hidden{display:none}
+.ad-spin-ring{
+  width:56px;height:56px;border-radius:50%;
+  border:4px solid rgba(249,115,22,.2);
+  border-top-color:#f97316;
+  animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ad-spin-label{font:700 13px system-ui;color:var(--mut);letter-spacing:.06em}
+
+/* reward toast (special, bigger) */
+#ad-reward-toast{
+  position:fixed;left:50%;bottom:calc(var(--navh) + var(--sb) + 90px);
+  transform:translate(-50%,20px);
+  background:linear-gradient(135deg,#14402a,#1b2230);
+  border:1.5px solid var(--green);
+  color:#fff;padding:12px 20px;border-radius:16px;
+  font-weight:800;font-size:14px;
+  opacity:0;pointer-events:none;transition:.25s;z-index:65;
+  max-width:88%;text-align:center;
+  box-shadow:0 6px 24px rgba(46,229,157,.25);
+}
+#ad-reward-toast.show{opacity:1;transform:translate(-50%,0)}
+#ad-reward-toast .rt-icon{font-size:22px;display:block;margin-bottom:4px}
+#ad-reward-toast .rt-amt{color:var(--green);font:900 18px ui-monospace,monospace}
 </style>
 </head>
 <body>
@@ -285,6 +356,28 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 </div>
 
 <div id="toast" class="toast"></div>
+
+<!-- ── Rewarded Ad Floating Button ── -->
+<button id="ad-reward-btn" class="idle" aria-label="Watch ad for bonus" title="Watch ad — earn bonus">
+  <span class="ab-icon">🎁</span>
+  <span class="ab-label">Watch Ad</span>
+  <span class="ab-amt" id="ad-btn-amt">+5 ETB</span>
+  <span class="ab-cd" id="ad-btn-cd">--:--</span>
+</button>
+
+<!-- Ad loading overlay -->
+<div id="ad-spinner-overlay" class="hidden">
+  <div class="ad-spin-ring"></div>
+  <div class="ad-spin-label">ማስታወቂያ እየተጫነ ነው...</div>
+</div>
+
+<!-- Reward toast -->
+<div id="ad-reward-toast">
+  <span class="rt-icon">🎉</span>
+  <span id="ad-reward-toast-msg">ቦነስ ተሰጥቷል!</span><br>
+  <span class="rt-amt" id="ad-reward-amt-display">+5.00 ETB</span>
+  <div style="font-size:11px;color:var(--mut);margin-top:4px" id="ad-reward-sub"></div>
+</div>
 
 <nav class="nav">
   <button id="nav-home" class="nb nav-active" onclick="switchPage('home')"><i class="fa-solid fa-house"></i><span>Home</span></button>
@@ -1082,6 +1175,243 @@ function unlockAudio() {
 }
 ['pointerdown', 'touchstart', 'click'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
 document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCalls(); });
+
+// ═══════════════════════════════════════════════════════
+//  MONETAG REWARDED AD SYSTEM
+//  Zone: 12140197
+//  Rules: 15-min cooldown per 2 ads, 8 ads/day cap
+//  Bonus: configurable via AD_BONUS_AMOUNT (default 5 ETB to play wallet)
+// ═══════════════════════════════════════════════════════
+(function AdRewardSystem() {
+
+  // ── Config (admin-adjustable) ──────────────────────────
+  const AD_BONUS_AMOUNT    = 5;       // ETB credited to play wallet per ad
+  const AD_COOLDOWN_AFTER  = 2;       // ads watched before cooldown kicks in
+  const AD_COOLDOWN_MS     = 15 * 60 * 1000;  // 15 minutes in ms
+  const AD_DAILY_CAP       = 8;       // max ads per calendar day (UTC+3)
+  const STORAGE_KEY        = 'adrs_v1';
+  const API_BASE           = 'https://onex-bingo-backend.onrender.com';
+
+  // ── State ──────────────────────────────────────────────
+  let adState = loadState();
+  let cdInterval = null;
+  let isDragging = false;
+  let dragStarted = false;
+  let dragOrigin = { x: 0, y: 0 };
+  let btnPos = { x: null, y: null };
+
+  // ── DOM refs ───────────────────────────────────────────
+  const btn          = document.getElementById('ad-reward-btn');
+  const btnAmt       = document.getElementById('ad-btn-amt');
+  const btnCd        = document.getElementById('ad-btn-cd');
+  const spinner      = document.getElementById('ad-spinner-overlay');
+  const rewardToast  = document.getElementById('ad-reward-toast');
+  const toastMsg     = document.getElementById('ad-reward-toast-msg');
+  const toastAmt     = document.getElementById('ad-reward-amt-display');
+  const toastSub     = document.getElementById('ad-reward-sub');
+
+  // ── Persistence ────────────────────────────────────────
+  function todayKey() {
+    // Use Ethiopia time (UTC+3) for daily reset
+    const d = new Date(Date.now() + 3 * 3600000);
+    return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return freshState();
+      const s = JSON.parse(raw);
+      // reset daily count if new day
+      if (s.dayKey !== todayKey()) { s.dayCount = 0; s.dayKey = todayKey(); }
+      return s;
+    } catch { return freshState(); }
+  }
+
+  function freshState() {
+    return { dayKey: todayKey(), dayCount: 0, batchCount: 0, cooldownUntil: 0 };
+  }
+
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(adState)); } catch {}
+  }
+
+  // ── Status helpers ─────────────────────────────────────
+  function isCapped()    { return adState.dayCount >= AD_DAILY_CAP; }
+  function isOnCooldown(){ return Date.now() < adState.cooldownUntil; }
+  function canWatch()    { return !isCapped() && !isOnCooldown(); }
+
+  function remainingToday() { return Math.max(0, AD_DAILY_CAP - adState.dayCount); }
+
+  // ── UI update ──────────────────────────────────────────
+  function refreshBtn() {
+    if (isCapped()) {
+      btn.classList.remove('idle','cooldown');
+      btn.classList.add('cooldown');
+      btnCd.textContent = 'MAX';
+      clearInterval(cdInterval);
+      return;
+    }
+    if (isOnCooldown()) {
+      btn.classList.remove('idle');
+      btn.classList.add('cooldown');
+      clearInterval(cdInterval);
+      cdInterval = setInterval(() => {
+        const left = adState.cooldownUntil - Date.now();
+        if (left <= 0) { clearInterval(cdInterval); adState.cooldownUntil = 0; saveState(); refreshBtn(); return; }
+        const m = Math.floor(left / 60000);
+        const s = Math.floor((left % 60000) / 1000);
+        btnCd.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }, 500);
+      return;
+    }
+    // ready
+    btn.classList.remove('cooldown');
+    btn.classList.add('idle');
+    clearInterval(cdInterval);
+    btnAmt.textContent = `+${AD_BONUS_AMOUNT} ETB`;
+  }
+
+  // ── Reward toast ───────────────────────────────────────
+  function showRewardToast(amount, remaining) {
+    toastMsg.textContent = 'ቦነስ ወደ Play Wallet ተጨምሯል!';
+    toastAmt.textContent = `+${amount.toFixed(2)} ETB`;
+    toastSub.textContent = `ዛሬ ${remaining} ማስታወቂያ ቀርቷል`;
+    rewardToast.classList.add('show');
+    setTimeout(() => rewardToast.classList.remove('show'), 3800);
+  }
+
+  // ── Backend credit call ────────────────────────────────
+  async function creditBonus(amount) {
+    const uid = window.currentUserId;
+    if (!uid || uid === '00000') throw new Error('no_user');
+
+    const res = await fetch(`${API_BASE}/api/ad-reward`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
+      },
+      body: JSON.stringify({
+        userId: uid,
+        amount: amount,
+        zone: '12140197',
+        ts: Date.now()
+      })
+    });
+    if (!res.ok) throw new Error(`http_${res.status}`);
+    const data = await res.json();
+    if (data.status !== 'success') throw new Error(data.message || 'api_fail');
+    return data;
+  }
+
+  // ── Ad trigger ─────────────────────────────────────────
+  async function triggerAd() {
+    if (!canWatch()) { refreshBtn(); return; }
+
+    spinner.classList.remove('hidden');
+    btn.classList.remove('idle');
+
+    try {
+      // Fire Monetag rewarded interstitial
+      await show_12140197();
+
+      // Ad completed — credit the bonus
+      spinner.classList.add('hidden');
+
+      try {
+        await creditBonus(AD_BONUS_AMOUNT);
+      } catch (apiErr) {
+        console.error('[AdReward] Backend credit failed:', apiErr);
+        // Still update client-side count even if server glitches (server is source of truth)
+      }
+
+      // Update local state
+      adState.dayCount  += 1;
+      adState.batchCount += 1;
+
+      if (adState.batchCount >= AD_COOLDOWN_AFTER) {
+        adState.cooldownUntil = Date.now() + AD_COOLDOWN_MS;
+        adState.batchCount = 0;
+      }
+      saveState();
+
+      // Refresh wallet display
+      refreshUserDataSoon();
+
+      showRewardToast(AD_BONUS_AMOUNT, remainingToday());
+
+    } catch (err) {
+      spinner.classList.add('hidden');
+      // User closed ad early or Monetag error — don't credit
+      console.warn('[AdReward] Ad not completed or dismissed:', err);
+      showToast('ማስታወቂያ አልተጠናቀቀም — ሙሉ ሲያዩ ቦነስ ይከፈላል');
+    }
+
+    refreshBtn();
+  }
+
+  // ── Draggable logic ────────────────────────────────────
+  function setPos(x, y) {
+    const bw = btn.offsetWidth  || 58;
+    const bh = btn.offsetHeight || 58;
+    x = Math.max(8, Math.min(window.innerWidth  - bw - 8, x));
+    y = Math.max(8, Math.min(window.innerHeight - bh - 8, y));
+    btn.style.left   = x + 'px';
+    btn.style.top    = y + 'px';
+    btn.style.right  = 'auto';
+    btn.style.bottom = 'auto';
+    btnPos = { x, y };
+  }
+
+  function initPos() {
+    // Default: bottom-right above nav
+    const navH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--navh')) || 64;
+    const sb   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sb'))  || 0;
+    const bw = 58, bh = 58;
+    setPos(window.innerWidth - bw - 14, window.innerHeight - navH - sb - bh - 14);
+  }
+
+  // Pointer events for drag
+  btn.addEventListener('pointerdown', e => {
+    isDragging  = false;
+    dragStarted = true;
+    dragOrigin  = { x: e.clientX - (btnPos.x ?? btn.getBoundingClientRect().left),
+                    y: e.clientY - (btnPos.y ?? btn.getBoundingClientRect().top) };
+    btn.setPointerCapture(e.pointerId);
+  });
+
+  btn.addEventListener('pointermove', e => {
+    if (!dragStarted) return;
+    const dx = e.clientX - dragOrigin.x;
+    const dy = e.clientY - dragOrigin.y;
+    if (!isDragging && (Math.abs(e.clientX - (dragOrigin.x + (btnPos.x ?? 0))) > 6 || Math.abs(e.clientY - (dragOrigin.y + (btnPos.y ?? 0))) > 6)) {
+      isDragging = true;
+      btn.classList.add('dragging');
+    }
+    if (isDragging) setPos(e.clientX - dragOrigin.x, e.clientY - dragOrigin.y);
+  });
+
+  btn.addEventListener('pointerup', e => {
+    btn.classList.remove('dragging');
+    if (!isDragging) triggerAd();   // it was a tap, not a drag
+    isDragging  = false;
+    dragStarted = false;
+  });
+
+  btn.addEventListener('pointercancel', () => {
+    btn.classList.remove('dragging');
+    isDragging = dragStarted = false;
+  });
+
+  // ── Init ───────────────────────────────────────────────
+  initPos();
+  refreshBtn();
+
+  // Re-check on visibility (e.g. tab switch back)
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { adState = loadState(); refreshBtn(); } });
+
+})();
 
 // key = 1..75, or 'bingo'
 function playCall(key) {
