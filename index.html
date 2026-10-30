@@ -1096,13 +1096,55 @@ function renderTransactionHistory(transactions) {
         historyContainer.innerHTML = `<div class="empty">ምንም የግብይት ታሪክ የለም (No transactions yet).</div>`;
         return;
     }
-    const sortedTx = transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Types that are money-IN (green + arrow-down)
+    // ad_reward is ALWAYS in — hardcoded, never falls through to amount-sign logic
+    const IN_TYPES = new Set([
+        'deposit', 'win', 'refund', 'bonus',
+        'deposit_bonus', 'ad_reward', 'referral_bonus', 'admin_adjustment'
+    ]);
+
+    const TX_LABEL = {
+        deposit:          'ገቢ (Deposit)',
+        withdraw:         'ወጪ (Withdraw)',
+        win:              'ሽልማት (Win)',
+        refund:           'ተመላሽ (Refund)',
+        bonus:            'ቦነስ (Bonus)',
+        deposit_bonus:    'የተቀማጭ ቦነስ',
+        ad_reward:        '📺 የማስታወቂያ ቦነስ',
+        referral_bonus:   '🎁 የጋብዣ ቦነስ',
+        admin_adjustment: 'Admin Adjustment',
+    };
+
+    const sortedTx = [...transactions].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     historyContainer.innerHTML = sortedTx.map(tx => {
-        const isIn = ['deposit', 'win', 'refund', 'bonus', 'deposit_bonus'].includes(tx.type);
-        const dateStr = new Date(tx.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        return `<div class="hrow"><div class="l"><div class="hic ${isIn ? 'in' : 'out'}"><i class="fa-solid ${isIn ? 'fa-arrow-down' : 'fa-arrow-up'}"></i></div>` +
-               `<div><div class="t">${String(tx.type).replace('_', ' ')}</div><div class="d">${dateStr}</div></div></div>` +
-               `<div class="a ${isIn ? 'in' : 'out'}">${isIn ? '+' : '-'}${Number(tx.amount).toFixed(2)} ETB</div></div>`;
+        const type = (tx.type || '').toString().trim();
+
+        // ad_reward is ALWAYS green — explicit guard so no edge case flips it red
+        let isIn;
+        if (type === 'ad_reward') {
+            isIn = true;
+        } else if (type === 'admin_adjustment') {
+            isIn = Number(tx.amount) >= 0;
+        } else {
+            isIn = IN_TYPES.has(type);
+        }
+
+        const label   = TX_LABEL[type] || type.replace(/_/g, ' ');
+        const dateStr = new Date(tx.timestamp).toLocaleString('en-US', {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        const amt = Math.abs(Number(tx.amount)).toFixed(2);
+        const sign = isIn ? '+' : '-';
+        const cls  = isIn ? 'in' : 'out';
+        const icon = isIn ? 'fa-arrow-down' : 'fa-arrow-up';
+
+        return `<div class="hrow">` +
+               `<div class="l"><div class="hic ${cls}">` +
+               `<i class="fa-solid ${icon}"></i></div>` +
+               `<div><div class="t">${label}</div><div class="d">${dateStr}</div></div></div>` +
+               `<div class="a ${cls}">${sign}${amt} ETB</div>` +
+               `</div>`;
     }).join('');
 }
   </script>
@@ -1177,239 +1219,278 @@ function unlockAudio() {
 document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCalls(); });
 
 // ═══════════════════════════════════════════════════════
-//  MONETAG REWARDED AD SYSTEM
-//  Zone: 12140197
-//  Rules: 15-min cooldown per 2 ads, 8 ads/day cap
-//  Bonus: configurable via AD_BONUS_AMOUNT (default 5 ETB to play wallet)
+//  MONETAG REWARDED AD SYSTEM  v3 — full rewrite
+//  Zone: 12140197  |  Default: 3 ads → 5 min cooldown
 // ═══════════════════════════════════════════════════════
 (function AdRewardSystem() {
 
-  // ── Config (admin-adjustable) ──────────────────────────
-  const AD_BONUS_AMOUNT    = 5;       // ETB credited to play wallet per ad
-  const AD_COOLDOWN_AFTER  = 2;       // ads watched before cooldown kicks in
-  const AD_COOLDOWN_MS     = 15 * 60 * 1000;  // 15 minutes in ms
-  const AD_DAILY_CAP       = 8;       // max ads per calendar day (UTC+3)
-  const STORAGE_KEY        = 'adrs_v1';
-  const API_BASE           = 'https://onex-bingo-backend.onrender.com';
+  // ── Live config (synced from server on load + after each ad) ──────
+  let CFG = {
+    bonus:    5,            // ETB per ad
+    after:    3,            // ads before cooldown triggers
+    cdMs:     5 * 60000,   // cooldown duration ms
+    cap:      8,            // daily cap
+  };
 
-  // ── State ──────────────────────────────────────────────
-  let adState = loadState();
+  const STORAGE_KEY = 'adrs_v3';   // v3 — clean slate
+  const API_BASE    = 'https://onex-bingo-backend.onrender.com';
+
+  // ── DOM refs ──────────────────────────────────────────
+  const btn         = document.getElementById('ad-reward-btn');
+  const btnAmt      = document.getElementById('ad-btn-amt');
+  const btnCd       = document.getElementById('ad-btn-cd');
+  const spinner     = document.getElementById('ad-spinner-overlay');
+  const toast       = document.getElementById('ad-reward-toast');
+  const toastMsg    = document.getElementById('ad-reward-toast-msg');
+  const toastAmt    = document.getElementById('ad-reward-amt-display');
+  const toastSub    = document.getElementById('ad-reward-sub');
+
+  if (!btn) return;  // guard — if HTML not updated yet, bail silently
+
+  // ── State ─────────────────────────────────────────────
+  let adState    = loadState();
   let cdInterval = null;
-  let isDragging = false;
-  let dragStarted = false;
-  let dragOrigin = { x: 0, y: 0 };
-  let btnPos = { x: null, y: null };
+  let dragging   = false;
+  let dragOn     = false;
+  let origin     = { x: 0, y: 0 };
+  let pos        = { x: null, y: null };
+  let adRunning  = false;   // prevents double-tap mid-ad
 
-  // ── DOM refs ───────────────────────────────────────────
-  const btn          = document.getElementById('ad-reward-btn');
-  const btnAmt       = document.getElementById('ad-btn-amt');
-  const btnCd        = document.getElementById('ad-btn-cd');
-  const spinner      = document.getElementById('ad-spinner-overlay');
-  const rewardToast  = document.getElementById('ad-reward-toast');
-  const toastMsg     = document.getElementById('ad-reward-toast-msg');
-  const toastAmt     = document.getElementById('ad-reward-amt-display');
-  const toastSub     = document.getElementById('ad-reward-sub');
-
-  // ── Persistence ────────────────────────────────────────
+  // ── Persistence ───────────────────────────────────────
   function todayKey() {
-    // Use Ethiopia time (UTC+3) for daily reset
-    const d = new Date(Date.now() + 3 * 3600000);
+    const d = new Date(Date.now() + 3 * 3600000); // UTC+3
     return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  }
+
+  function fresh() {
+    return { dayKey: todayKey(), dayCount: 0, batchCount: 0, cooldownUntil: 0 };
   }
 
   function loadState() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return freshState();
-      const s = JSON.parse(raw);
-      // reset daily count if new day
-      if (s.dayKey !== todayKey()) { s.dayCount = 0; s.dayKey = todayKey(); }
+      const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (!s) return fresh();
+      if (s.dayKey !== todayKey()) return fresh();   // new day = clean slate
+      s.batchCount    = Math.max(0, parseInt(s.batchCount)    || 0);
+      s.dayCount      = Math.max(0, parseInt(s.dayCount)      || 0);
+      s.cooldownUntil = parseInt(s.cooldownUntil) || 0;
       return s;
-    } catch { return freshState(); }
+    } catch { return fresh(); }
   }
 
-  function freshState() {
-    return { dayKey: todayKey(), dayCount: 0, batchCount: 0, cooldownUntil: 0 };
-  }
-
-  function saveState() {
+  function save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(adState)); } catch {}
   }
 
-  // ── Status helpers ─────────────────────────────────────
-  function isCapped()    { return adState.dayCount >= AD_DAILY_CAP; }
-  function isOnCooldown(){ return Date.now() < adState.cooldownUntil; }
-  function canWatch()    { return !isCapped() && !isOnCooldown(); }
+  // ── Status ────────────────────────────────────────────
+  function capped()    { return adState.dayCount >= CFG.cap; }
+  function onCD()      { return Date.now() < adState.cooldownUntil; }
+  function canWatch()  { return !capped() && !onCD() && !adRunning; }
+  function remaining() { return Math.max(0, CFG.cap - adState.dayCount); }
 
-  function remainingToday() { return Math.max(0, AD_DAILY_CAP - adState.dayCount); }
+  // ── Apply server config ───────────────────────────────
+  function applyServerCfg(d) {
+    if (!d) return;
+    if (d.bonus_amount     != null) CFG.bonus = Number(d.bonus_amount);
+    if (d.cooldown_count   != null) CFG.after = parseInt(d.cooldown_count);
+    if (d.cooldown_minutes != null) CFG.cdMs  = parseInt(d.cooldown_minutes) * 60000;
+    if (d.daily_cap        != null) CFG.cap   = parseInt(d.daily_cap);
+    if (d.bonus_credited   != null) CFG.bonus = Number(d.bonus_credited);
+  }
 
-  // ── UI update ──────────────────────────────────────────
+  // ── Fetch live config on load ─────────────────────────
+  async function fetchCfg() {
+    try {
+      const r = await fetch(`${API_BASE}/api/ad-config`);
+      const d = await r.json();
+      if (d.status === 'success') { applyServerCfg(d); refreshBtn(); }
+    } catch {}
+  }
+
+  // ── Button UI ─────────────────────────────────────────
   function refreshBtn() {
-    if (isCapped()) {
-      btn.classList.remove('idle','cooldown');
-      btn.classList.add('cooldown');
+    if (!btn) return;
+    clearInterval(cdInterval);
+
+    if (capped()) {
+      btn.className = btn.className.replace(/\bidle\b|\bcooldown\b/g, '').trim() + ' cooldown';
       btnCd.textContent = 'MAX';
-      clearInterval(cdInterval);
       return;
     }
-    if (isOnCooldown()) {
-      btn.classList.remove('idle');
-      btn.classList.add('cooldown');
-      clearInterval(cdInterval);
+
+    if (onCD()) {
+      btn.className = btn.className.replace(/\bidle\b|\bcooldown\b/g, '').trim() + ' cooldown';
       cdInterval = setInterval(() => {
         const left = adState.cooldownUntil - Date.now();
-        if (left <= 0) { clearInterval(cdInterval); adState.cooldownUntil = 0; saveState(); refreshBtn(); return; }
-        const m = Math.floor(left / 60000);
-        const s = Math.floor((left % 60000) / 1000);
-        btnCd.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        if (left <= 0) {
+          clearInterval(cdInterval);
+          adState.cooldownUntil = 0;
+          adState.batchCount    = 0;
+          save();
+          refreshBtn();
+          return;
+        }
+        const m = String(Math.floor(left / 60000)).padStart(2, '0');
+        const s = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
+        btnCd.textContent = `${m}:${s}`;
       }, 500);
       return;
     }
-    // ready
-    btn.classList.remove('cooldown');
-    btn.classList.add('idle');
-    clearInterval(cdInterval);
-    btnAmt.textContent = `+${AD_BONUS_AMOUNT} ETB`;
+
+    // Ready
+    btn.className = btn.className.replace(/\bidle\b|\bcooldown\b/g, '').trim() + ' idle';
+    btnAmt.textContent = `+${CFG.bonus} ETB`;
   }
 
-  // ── Reward toast ───────────────────────────────────────
-  function showRewardToast(amount, remaining) {
-    toastMsg.textContent = 'ቦነስ ወደ Play Wallet ተጨምሯል!';
-    toastAmt.textContent = `+${amount.toFixed(2)} ETB`;
-    toastSub.textContent = `ዛሬ ${remaining} ማስታወቂያ ቀርቷል`;
-    rewardToast.classList.add('show');
-    setTimeout(() => rewardToast.classList.remove('show'), 3800);
+  // ── Reward toast ──────────────────────────────────────
+  function showToastReward(amount, rem) {
+    if (!toast) return;
+    if (toastMsg) toastMsg.textContent = 'ቦነስ ወደ Play Wallet ተጨምሯል!';
+    if (toastAmt) toastAmt.textContent = `+${Number(amount).toFixed(2)} ETB`;
+    if (toastSub) toastSub.textContent = rem > 0 ? `ዛሬ ${rem} ማስታወቂያ ቀርቷል` : 'ዕለታዊ ገደብ ደርሷል';
+    toast.classList.remove('show');
+    void toast.offsetWidth;                          // force reflow
+    toast.style.zIndex = '999';                      // guarantee above everything
+    toast.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toast.classList.remove('show'), 4200);
   }
 
-  // ── Backend credit call ────────────────────────────────
-  async function creditBonus(amount) {
+  // ── Backend credit ────────────────────────────────────
+  async function creditBackend() {
     const uid = window.currentUserId;
-    if (!uid || uid === '00000') throw new Error('no_user');
-
-    const res = await fetch(`${API_BASE}/api/ad-reward`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Telegram-Init-Data': (window.Telegram?.WebApp?.initData || '')
-      },
-      body: JSON.stringify({
-        userId: uid,
-        amount: amount,
-        zone: '12140197',
-        ts: Date.now()
-      })
-    });
-    if (!res.ok) throw new Error(`http_${res.status}`);
-    const data = await res.json();
-    if (data.status !== 'success') throw new Error(data.message || 'api_fail');
-    return data;
+    if (!uid || uid === '00000') return null;
+    try {
+      const r = await fetch(`${API_BASE}/api/ad-reward`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || ''
+        },
+        body: JSON.stringify({ userId: uid, amount: CFG.bonus, zone: '12140197', ts: Date.now() })
+      });
+      const d = await r.json();
+      return d.status === 'success' ? d : null;
+    } catch (e) {
+      console.error('[AdReward] credit failed:', e);
+      return null;
+    }
   }
 
-  // ── Ad trigger ─────────────────────────────────────────
+  // ── Core trigger ──────────────────────────────────────
   async function triggerAd() {
     if (!canWatch()) { refreshBtn(); return; }
 
+    adRunning = true;
     spinner.classList.remove('hidden');
     btn.classList.remove('idle');
 
+    // ── Track whether Monetag completed or was dismissed ──
+    // Monetag's promise resolves on BOTH completion and dismiss on some versions.
+    // We use a timed heuristic: if the promise resolves in under 4s it was likely dismissed.
+    let adCompleted = false;
+    const adStart   = Date.now();
+
     try {
-      // Fire Monetag rewarded interstitial
       await show_12140197();
-
-      // Ad completed — credit the bonus
-      spinner.classList.add('hidden');
-
-      try {
-        await creditBonus(AD_BONUS_AMOUNT);
-      } catch (apiErr) {
-        console.error('[AdReward] Backend credit failed:', apiErr);
-        // Still update client-side count even if server glitches (server is source of truth)
-      }
-
-      // Update local state
-      adState.dayCount  += 1;
-      adState.batchCount += 1;
-
-      if (adState.batchCount >= AD_COOLDOWN_AFTER) {
-        adState.cooldownUntil = Date.now() + AD_COOLDOWN_MS;
-        adState.batchCount = 0;
-      }
-      saveState();
-
-      // Refresh wallet display
-      refreshUserDataSoon();
-
-      showRewardToast(AD_BONUS_AMOUNT, remainingToday());
-
-    } catch (err) {
-      spinner.classList.add('hidden');
-      // User closed ad early or Monetag error — don't credit
-      console.warn('[AdReward] Ad not completed or dismissed:', err);
-      showToast('ማስታወቂያ አልተጠናቀቀም — ሙሉ ሲያዩ ቦነስ ይከፈላል');
+      const elapsed = Date.now() - adStart;
+      // Heuristic: real rewarded ads take at least 5s. Under that = dismissed/error.
+      adCompleted = elapsed >= 5000;
+    } catch {
+      adCompleted = false;
     }
 
+    spinner.classList.add('hidden');
+    adRunning = false;
+
+    if (!adCompleted) {
+      showToast('ማስታወቂያ አልተጠናቀቀም — ሙሉ ሲያዩ ቦነስ ይከፈላል');
+      refreshBtn();
+      return;
+    }
+
+    // ── Ad fully watched ──────────────────────────────────
+    // 1. Credit backend & get live config back
+    const serverData = await creditBackend();
+    applyServerCfg(serverData);   // sync config BEFORE counting
+
+    // 2. Increment counts using synced config
+    adState.dayCount   += 1;
+    adState.batchCount += 1;
+
+    if (adState.batchCount >= CFG.after) {
+      adState.cooldownUntil = Date.now() + CFG.cdMs;
+      adState.batchCount    = 0;
+    }
+    save();
+
+    // 3. Force-refresh wallet display (bypass 60s throttle)
+    lastUserRefresh = 0;
+    refreshUserDataSoon();
+
+    // 4. Show toast
+    showToastReward(CFG.bonus, remaining());
     refreshBtn();
   }
 
-  // ── Draggable logic ────────────────────────────────────
-  function setPos(x, y) {
+  // ── Drag ──────────────────────────────────────────────
+  function clamp(x, y) {
     const bw = btn.offsetWidth  || 58;
     const bh = btn.offsetHeight || 58;
-    x = Math.max(8, Math.min(window.innerWidth  - bw - 8, x));
-    y = Math.max(8, Math.min(window.innerHeight - bh - 8, y));
-    btn.style.left   = x + 'px';
-    btn.style.top    = y + 'px';
-    btn.style.right  = 'auto';
-    btn.style.bottom = 'auto';
-    btnPos = { x, y };
+    return [
+      Math.max(8, Math.min(window.innerWidth  - bw - 8, x)),
+      Math.max(8, Math.min(window.innerHeight - bh - 8, y))
+    ];
+  }
+
+  function moveTo(x, y) {
+    const [cx, cy] = clamp(x, y);
+    btn.style.cssText += `;left:${cx}px;top:${cy}px;right:auto;bottom:auto`;
+    pos = { x: cx, y: cy };
   }
 
   function initPos() {
-    // Default: bottom-right above nav
     const navH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--navh')) || 64;
-    const sb   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sb'))  || 0;
-    const bw = 58, bh = 58;
-    setPos(window.innerWidth - bw - 14, window.innerHeight - navH - sb - bh - 14);
+    const sb   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sb'))   || 0;
+    moveTo(window.innerWidth - 72, window.innerHeight - navH - sb - 72);
   }
 
-  // Pointer events for drag
   btn.addEventListener('pointerdown', e => {
-    isDragging  = false;
-    dragStarted = true;
-    dragOrigin  = { x: e.clientX - (btnPos.x ?? btn.getBoundingClientRect().left),
-                    y: e.clientY - (btnPos.y ?? btn.getBoundingClientRect().top) };
+    dragging = false; dragOn = true;
+    const r = btn.getBoundingClientRect();
+    origin = { x: e.clientX - r.left, y: e.clientY - r.top };
     btn.setPointerCapture(e.pointerId);
   });
 
   btn.addEventListener('pointermove', e => {
-    if (!dragStarted) return;
-    const dx = e.clientX - dragOrigin.x;
-    const dy = e.clientY - dragOrigin.y;
-    if (!isDragging && (Math.abs(e.clientX - (dragOrigin.x + (btnPos.x ?? 0))) > 6 || Math.abs(e.clientY - (dragOrigin.y + (btnPos.y ?? 0))) > 6)) {
-      isDragging = true;
+    if (!dragOn) return;
+    const nx = e.clientX - origin.x;
+    const ny = e.clientY - origin.y;
+    if (!dragging && (Math.abs(nx - (pos.x || 0)) > 5 || Math.abs(ny - (pos.y || 0)) > 5)) {
+      dragging = true;
       btn.classList.add('dragging');
     }
-    if (isDragging) setPos(e.clientX - dragOrigin.x, e.clientY - dragOrigin.y);
+    if (dragging) moveTo(nx, ny);
   });
 
-  btn.addEventListener('pointerup', e => {
+  btn.addEventListener('pointerup', () => {
     btn.classList.remove('dragging');
-    if (!isDragging) triggerAd();   // it was a tap, not a drag
-    isDragging  = false;
-    dragStarted = false;
+    if (!dragging) triggerAd();
+    dragging = dragOn = false;
   });
 
   btn.addEventListener('pointercancel', () => {
     btn.classList.remove('dragging');
-    isDragging = dragStarted = false;
+    dragging = dragOn = false;
   });
 
-  // ── Init ───────────────────────────────────────────────
+  // ── Boot ──────────────────────────────────────────────
   initPos();
   refreshBtn();
-
-  // Re-check on visibility (e.g. tab switch back)
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { adState = loadState(); refreshBtn(); } });
+  fetchCfg();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { adState = loadState(); refreshBtn(); }
+  });
 
 })();
 
