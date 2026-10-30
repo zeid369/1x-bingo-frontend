@@ -1184,32 +1184,13 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
 // ═══════════════════════════════════════════════════════
 (function AdRewardSystem() {
 
-  // ── Config (fetched live from /api/ad-config on load) ──
-  // Defaults used until the server responds — kept in sync automatically
-  let AD_BONUS_AMOUNT   = 5;       // ETB per ad
-  let AD_COOLDOWN_AFTER = 3;       // ads before cooldown (default matches new server default)
-  let AD_COOLDOWN_MS    = 5 * 60 * 1000;  // 5 min cooldown in ms (new default)
-  let AD_DAILY_CAP      = 8;       // max ads per day
-  const STORAGE_KEY     = 'adrs_v1';
-  const API_BASE        = 'https://onex-bingo-backend.onrender.com';
-
-  // Fetch live config and refresh button — fires once on load, non-blocking
-  async function fetchAdConfig() {
-    try {
-      const res  = await fetch(`${API_BASE}/api/ad-config`);
-      const data = await res.json();
-      if (data.status === 'success') {
-        AD_BONUS_AMOUNT   = data.bonus_amount;
-        AD_COOLDOWN_AFTER = data.cooldown_count;
-        AD_COOLDOWN_MS    = data.cooldown_minutes * 60 * 1000;
-        AD_DAILY_CAP      = data.daily_cap;
-        btnAmt.textContent = `+${AD_BONUS_AMOUNT} ETB`;
-        refreshBtn();
-      }
-    } catch (e) {
-      console.warn('[AdConfig] fetch failed, using defaults:', e);
-    }
-  }
+  // ── Config (admin-adjustable) ──────────────────────────
+  const AD_BONUS_AMOUNT    = 5;       // ETB credited to play wallet per ad
+  const AD_COOLDOWN_AFTER  = 2;       // ads watched before cooldown kicks in
+  const AD_COOLDOWN_MS     = 15 * 60 * 1000;  // 15 minutes in ms
+  const AD_DAILY_CAP       = 8;       // max ads per calendar day (UTC+3)
+  const STORAGE_KEY        = 'adrs_v1';
+  const API_BASE           = 'https://onex-bingo-backend.onrender.com';
 
   // ── State ──────────────────────────────────────────────
   let adState = loadState();
@@ -1345,13 +1326,8 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
         // Still update client-side count even if server glitches (server is source of truth)
       }
 
-      // Sync cooldown rules from server response (admin may have changed them)
-      if (data.cooldown_count)   AD_COOLDOWN_AFTER = data.cooldown_count;
-      if (data.cooldown_minutes) AD_COOLDOWN_MS    = data.cooldown_minutes * 60 * 1000;
-      if (data.daily_cap)        AD_DAILY_CAP      = data.daily_cap;
-
       // Update local state
-      adState.dayCount   += 1;
+      adState.dayCount  += 1;
       adState.batchCount += 1;
 
       if (adState.batchCount >= AD_COOLDOWN_AFTER) {
@@ -1431,7 +1407,6 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
   // ── Init ───────────────────────────────────────────────
   initPos();
   refreshBtn();
-  fetchAdConfig();  // sync live admin config on load
 
   // Re-check on visibility (e.g. tab switch back)
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { adState = loadState(); refreshBtn(); } });
