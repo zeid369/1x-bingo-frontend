@@ -7,6 +7,7 @@
 <title>1x Bingo</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script src='//libtl.com/sdk.js' data-zone='12140197' data-sdk='show_12140197'></script>
+<script src='https://sad.adsgram.ai/js/sad.min.js'></script>
 <style>
 :root{--bg:#0a111a;--card:#142030;--card2:#1b2b40;--line:#243649;--txt:#e9f1f7;--mut:#8aa0b4;--teal:#19d3b0;--green:#2ee59d;--gold:#ffc83d;--red:#ff5d6c;--cb:#3b82f6;--ci:#6366f1;--cn:#a855f7;--cg:#10b981;--co:#f97316;--sb:env(safe-area-inset-bottom,0px);--navh:64px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -1219,20 +1220,28 @@ function unlockAudio() {
 document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCalls(); });
 
 // ═══════════════════════════════════════════════════════
-//  MONETAG REWARDED AD SYSTEM  v3 — full rewrite
-//  Zone: 12140197  |  Default: 3 ads → 5 min cooldown
+//  DUAL-NETWORK AD SYSTEM  v4
+//  Rotation: ads 1-4 → Adsgram (int-57444)
+//            ads 5-8 → Monetag (zone 12140197)
+//  Both pay same 5 ETB bonus to play wallet
+//  Backend logs which network served each ad for comparison
 // ═══════════════════════════════════════════════════════
 (function AdRewardSystem() {
 
+  // ── Network config ────────────────────────────────────
+  const ADSGRAM_BLOCK_ID = 'int-57444';   // Adsgram block
+  const MONETAG_ZONE     = '12140197';    // Monetag zone
+
   // ── Live config (synced from server on load + after each ad) ──────
   let CFG = {
-    bonus:    5,            // ETB per ad
-    after:    3,            // ads before cooldown triggers
-    cdMs:     5 * 60000,   // cooldown duration ms
-    cap:      8,            // daily cap
+    bonus:       5,           // ETB per ad
+    after:       3,           // ads before cooldown
+    cdMs:        5 * 60000,   // cooldown ms
+    cap:         8,           // total daily cap
+    adsgramCap:  4,           // first N ads → Adsgram, rest → Monetag
   };
 
-  const STORAGE_KEY = 'adrs_v3';   // v3 — clean slate
+  const STORAGE_KEY = 'adrs_v4';   // v4 — dual network
   const API_BASE    = 'https://onex-bingo-backend.onrender.com';
 
   // ── DOM refs ──────────────────────────────────────────
@@ -1291,11 +1300,12 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
   // ── Apply server config ───────────────────────────────
   function applyServerCfg(d) {
     if (!d) return;
-    if (d.bonus_amount     != null) CFG.bonus = Number(d.bonus_amount);
-    if (d.cooldown_count   != null) CFG.after = parseInt(d.cooldown_count);
-    if (d.cooldown_minutes != null) CFG.cdMs  = parseInt(d.cooldown_minutes) * 60000;
-    if (d.daily_cap        != null) CFG.cap   = parseInt(d.daily_cap);
-    if (d.bonus_credited   != null) CFG.bonus = Number(d.bonus_credited);
+    if (d.bonus_amount     != null) CFG.bonus      = Number(d.bonus_amount);
+    if (d.cooldown_count   != null) CFG.after      = parseInt(d.cooldown_count);
+    if (d.cooldown_minutes != null) CFG.cdMs       = parseInt(d.cooldown_minutes) * 60000;
+    if (d.daily_cap        != null) CFG.cap        = parseInt(d.daily_cap);
+    if (d.bonus_credited   != null) CFG.bonus      = Number(d.bonus_credited);
+    if (d.adsgram_cap      != null) CFG.adsgramCap = parseInt(d.adsgram_cap);
   }
 
   // ── Fetch live config on load ─────────────────────────
@@ -1343,21 +1353,62 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
   }
 
   // ── Reward toast ──────────────────────────────────────
-  function showToastReward(amount, rem) {
+  function showToastReward(amount, rem, network) {
     if (!toast) return;
     if (toastMsg) toastMsg.textContent = 'ቦነስ ወደ Play Wallet ተጨምሯል!';
     if (toastAmt) toastAmt.textContent = `+${Number(amount).toFixed(2)} ETB`;
-    if (toastSub) toastSub.textContent = rem > 0 ? `ዛሬ ${rem} ማስታወቂያ ቀርቷል` : 'ዕለታዊ ገደብ ደርሷል';
+    if (toastSub) {
+      const remTxt = rem > 0 ? `ዛሬ ${rem} ማስታወቂያ ቀርቷል` : 'ዕለታዊ ገደብ ደርሷል';
+      const netTxt = network === 'adsgram' ? ' · Adsgram' : ' · Monetag';
+      toastSub.textContent = remTxt + netTxt;
+    }
     toast.classList.remove('show');
-    void toast.offsetWidth;                          // force reflow
-    toast.style.zIndex = '999';                      // guarantee above everything
+    void toast.offsetWidth;
+    toast.style.zIndex = '999';
     toast.classList.add('show');
     clearTimeout(toast._t);
     toast._t = setTimeout(() => toast.classList.remove('show'), 4200);
   }
 
+  // ── Network selector ─────────────────────────────────
+  // First CFG.adsgramCap ads of the day → Adsgram
+  // Remaining ads → Monetag
+  // Both values are live — admin can change via /setadbonus adsgram or /setadbonus monetag
+  function whichNetwork() {
+    return adState.dayCount < CFG.adsgramCap ? 'adsgram' : 'monetag';
+  }
+
+  // ── Adsgram ad runner ─────────────────────────────────
+  async function runAdsgram() {
+    return new Promise((resolve, reject) => {
+      try {
+        const AdController = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+        AdController.show()
+          .then(result => {
+            // result.done = true means user watched fully
+            if (result && result.done) resolve('adsgram');
+            else reject(new Error('adsgram_skipped'));
+          })
+          .catch(err => reject(err));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  // ── Monetag ad runner ─────────────────────────────────
+  async function runMonetag() {
+    const adStart = Date.now();
+    await show_12140197();
+    const elapsed = Date.now() - adStart;
+    // Monetag resolves on both completion and dismiss
+    // Heuristic: real ads take at least 5s
+    if (elapsed < 5000) throw new Error('monetag_dismissed');
+    return 'monetag';
+  }
+
   // ── Backend credit ────────────────────────────────────
-  async function creditBackend() {
+  async function creditBackend(network) {
     const uid = window.currentUserId;
     if (!uid || uid === '00000') return null;
     try {
@@ -1367,7 +1418,13 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
           'Content-Type': 'application/json',
           'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || ''
         },
-        body: JSON.stringify({ userId: uid, amount: CFG.bonus, zone: '12140197', ts: Date.now() })
+        body: JSON.stringify({
+          userId:  uid,
+          amount:  CFG.bonus,
+          zone:    network === 'adsgram' ? ADSGRAM_BLOCK_ID : MONETAG_ZONE,
+          network: network,   // logged server-side for CPM comparison
+          ts:      Date.now()
+        })
       });
       const d = await r.json();
       return d.status === 'success' ? d : null;
@@ -1385,19 +1442,19 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
     spinner.classList.remove('hidden');
     btn.classList.remove('idle');
 
-    // ── Track whether Monetag completed or was dismissed ──
-    // Monetag's promise resolves on BOTH completion and dismiss on some versions.
-    // We use a timed heuristic: if the promise resolves in under 4s it was likely dismissed.
+    const network = whichNetwork();
     let adCompleted = false;
-    const adStart   = Date.now();
 
     try {
-      await show_12140197();
-      const elapsed = Date.now() - adStart;
-      // Heuristic: real rewarded ads take at least 5s. Under that = dismissed/error.
-      adCompleted = elapsed >= 5000;
-    } catch {
+      if (network === 'adsgram') {
+        await runAdsgram();
+      } else {
+        await runMonetag();
+      }
+      adCompleted = true;
+    } catch (err) {
       adCompleted = false;
+      console.warn(`[AdReward] ${network} ad not completed:`, err);
     }
 
     spinner.classList.add('hidden');
@@ -1410,11 +1467,9 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
     }
 
     // ── Ad fully watched ──────────────────────────────────
-    // 1. Credit backend & get live config back
-    const serverData = await creditBackend();
-    applyServerCfg(serverData);   // sync config BEFORE counting
+    const serverData = await creditBackend(network);
+    applyServerCfg(serverData);
 
-    // 2. Increment counts using synced config
     adState.dayCount   += 1;
     adState.batchCount += 1;
 
@@ -1424,12 +1479,12 @@ document.addEventListener('DOMContentLoaded', () => { applySoundIcon(); loadCall
     }
     save();
 
-    // 3. Force-refresh wallet display (bypass 60s throttle)
+    // Force wallet refresh — bypass 60s throttle
     lastUserRefresh = 0;
     refreshUserDataSoon();
 
-    // 4. Show toast
-    showToastReward(CFG.bonus, remaining());
+    // Show which network served the ad (subtle sub-label)
+    showToastReward(CFG.bonus, remaining(), network);
     refreshBtn();
   }
 
